@@ -1,13 +1,13 @@
-# from sqlalchemy import create_engine
-# from sqlalchemy.ext.declarative import declarative_base
-# from sqlalchemy.orm import sessionmaker, scoped_session
-# import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
+import os
 
-# DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg2://user:biznessLogika@localhost:5432/database")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+psycopg2://jobuser:jobpass@localhost:5432/jobapp"
+)
 
-# engine = create_engine(DATABASE_URL)
-# SessionLocal = sessionmaker(bind=engine)
-
-# db_session = scoped_session(SessionLocal)
-
-# Base = declarative_base()
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine)
+db_session = scoped_session(SessionLocal)
+Base = declarative_base()

@@ -234,3 +234,22 @@ docker exec -it job-db psql -U jobuser -d jobapp -c "\dt"
 5. Только после этого — React-страницы.
 
 Если на каком-то шаге поймаешь ошибку — присылай текст, разберём.
+
+
+
+
+
+запускаю докер и docker start job-db
+
+барни короче чтобы подрубиться к бд локально 
+надо запустить докер 
+и потом в терминале прописать docker compose up -d, 
+а чтобы не локально это надо бд на сервак закинуть
+
+алембик миграции применить изменения к бд
+alembic revision --autogenerate -m "message"
+alembic upgrade head
+
+проверить содержимое таблиц
+docker exec -it my-postgres psql -U user -d database -c "SELECT * FROM users;" 
+docker exec -it my-postgres psql -U user -d database -c "SELECT * FROM files;"
