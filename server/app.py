@@ -1,13 +1,24 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
 from routes.auth import auth_bp
+from routes.companies import companies_bp
+from routes.resumes import resumes_bp
+from routes.vacancies import vacancies_bp
+from db import db_session
 
 
 def create_app():
     app = Flask(__name__)
-    CORS(app)  # разрешаем запросы с localhost:5173
+    CORS(app)
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(companies_bp)
+    app.register_blueprint(resumes_bp)
+    app.register_blueprint(vacancies_bp)
+
+    @app.teardown_appcontext
+    def shutdown_session(exception=None):
+        db_session.remove()
 
     @app.route("/api/health")
     def health():

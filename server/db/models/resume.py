@@ -8,7 +8,7 @@ class Resume(Base):
     __tablename__ = "resumes"
 
     res_id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.user_id"), nullable=False, unique=True)
 
     res_title = Column(String(150), nullable=False)
     gender = Column(String(10))

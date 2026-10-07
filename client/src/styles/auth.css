@@ -98,3 +98,128 @@ body {
 .auth-footer a:hover {
   text-decoration: underline;
 }
+
+.btn-primary,
+.btn-secondary {
+  display: block;
+  padding: 12px;
+  text-align: center;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: 0.15s;
+}
+
+.btn-primary {
+  background: #0000FF;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #0000FF;
+}
+
+.btn-secondary {
+  background: #fff;
+  color: #0000FF;
+  border: 1px solid #0000FF;
+}
+
+.btn-secondary:hover {
+  background: #eef2ff;
+}
+
+.info-card {
+  margin-top: 20px;
+  padding: 16px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.info-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #667085;
+  margin-bottom: 6px;
+}
+
+.info-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 4px;
+}
+
+.info-sub {
+  font-size: 14px;
+  color: #667085;
+}
+
+.btn-logout {
+  width: 100%;
+  padding: 12px;
+  margin-top: 20px;
+  background: #fff;
+  color: #0000FF;
+  border: 1px solid #0000FF;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 15px;
+}
+
+.btn-logout:hover {
+  background: #eef2ff;
+}
+
+.vacancy-card {
+  padding: 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.vacancy-card-body {
+  flex: 1;
+}
+
+.vacancy-card h3 {
+  margin: 0 0 6px;
+}
+
+.vacancy-card-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid #0000FF;
+  background: #fff;
+  color: #0000FF;
+  white-space: nowrap;
+}
+
+.btn-small:hover {
+  background: #eef2ff;
+}
+
+.btn-small.danger {
+  border-color: #8F0000;
+  color: #8F0000;
+}
+
+.btn-small.danger:hover {
+  background: #fef2f2;
+}
