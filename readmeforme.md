@@ -88,6 +88,27 @@ client/
 └── vite.config.js
 ```
 
+ Структура фронта
+Создай в client/src/ папки:
+
+text
+src/
+├── api/
+│   └── client.js          # axios + baseURL + перехватчик токена
+├── services/
+│   └── authService.js     # register, login, me
+├── context/
+│   └── AuthContext.jsx    # глобальный стейт: user, token, login, logout
+├── components/
+│   └── ProtectedRoute.jsx # защита роутов по роли
+├── pages/
+│   ├── RoleSelectPage.jsx
+│   ├── LoginPage.jsx
+│   ├── RegisterPage.jsx
+│   └── HomePage.jsx
+├── App.jsx
+└── main.jsx
+
 **Ключевое правило:** компонент **никогда** не делает `fetch` напрямую. Он вызывает хук или сервис. Так потом легко менять API в одном месте.
 
 ---
@@ -251,5 +272,31 @@ alembic revision --autogenerate -m "message"
 alembic upgrade head
 
 проверить содержимое таблиц
-docker exec -it my-postgres psql -U user -d database -c "SELECT * FROM users;" 
-docker exec -it my-postgres psql -U user -d database -c "SELECT * FROM files;"
+По каждой таблице отдельно
+users:
+bash
+docker exec -it job-db psql -U jobuser -d jobapp -c "SELECT user_id, user_email, role, last_name, first_name, middle_name FROM users;"
+companies:
+bash
+docker exec -it job-db psql -U jobuser -d jobapp -c "SELECT * FROM companies;"
+resumes:
+bash
+docker exec -it job-db psql -U jobuser -d jobapp -c "SELECT * FROM resumes;"
+vacancies:
+bash
+docker exec -it job-db psql -U jobuser -d jobapp -c "SELECT * FROM vacancies;"
+applications:
+bash
+docker exec -it job-db psql -U jobuser -d jobapp -c "SELECT * FROM applications;"
+
+
+🚀 Запуск
+Терминал 1 — backend:
+bash
+cd D:\Projects\tail-hunted\server
+python app.py
+Терминал 2 — frontend:
+bash
+cd D:\Projects\tail-hunted\client
+npm run dev
+И ДОЛБОЁБ ЗАПУСТИ ДОКЕР БЛЯТЬ

@@ -1,8 +1,7 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from db import db_session
 from db.models import User
 from services.auth_service import hash_password, verify_password, create_token
-from flask import g
 from utils.auth_middleware import token_required
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -44,7 +43,9 @@ def register():
             "id": user.user_id,
             "email": user.user_email,
             "role": user.role,
-            "full_name": f"{user.last_name} {user.first_name} {user.middle_name}".strip(),
+            "last_name": user.last_name,
+            "first_name": user.first_name,
+            "middle_name": user.middle_name,
         }
     }), 201
 
@@ -69,9 +70,12 @@ def login():
             "id": user.user_id,
             "email": user.user_email,
             "role": user.role,
-            "full_name": f"{user.last_name} {user.first_name} {user.middle_name}".strip(),
+            "last_name": user.last_name,
+            "first_name": user.first_name,
+            "middle_name": user.middle_name,
         }
     })
+
 
 @auth_bp.route("/me", methods=["GET"])
 @token_required
