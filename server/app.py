@@ -4,8 +4,8 @@ from routes.auth import auth_bp
 from routes.companies import companies_bp
 from routes.resumes import resumes_bp
 from routes.vacancies import vacancies_bp
+from routes.applications import applications_bp
 from db import db_session
-
 
 def create_app():
     app = Flask(__name__)
@@ -15,6 +15,7 @@ def create_app():
     app.register_blueprint(companies_bp)
     app.register_blueprint(resumes_bp)
     app.register_blueprint(vacancies_bp)
+    app.register_blueprint(applications_bp)
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):

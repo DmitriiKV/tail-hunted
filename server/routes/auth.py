@@ -20,7 +20,6 @@ def register():
     if data["role"] not in ("candidate", "employer"):
         return jsonify({"error": "role должен быть candidate или employer"}), 400
 
-    # Проверка на существующий email
     existing = db_session.query(User).filter_by(user_email=data["email"]).first()
     if existing:
         return jsonify({"error": "Пользователь с таким email уже существует"}), 400
