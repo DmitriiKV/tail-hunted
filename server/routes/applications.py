@@ -167,8 +167,16 @@ def get_vacancy_applications(vac_id):
             "status": app.status,
             "app_created_at": app.app_created_at.isoformat(),
             "resume": {
+                "res_id": resume.res_id,
                 "res_title": resume.res_title,
+                "gender": resume.gender,
+                "birth_date": (
+                    resume.birth_date.isoformat()
+                    if resume.birth_date else None
+                ),
+                "salary_expectation": resume.salary_expectation,
                 "professional_area": resume.professional_area,
+                "education": resume.education,
                 "skills": resume.skills,
                 "experience": resume.experience
             }
@@ -223,4 +231,73 @@ def update_application_status(app_id):
         "message": "Статус отклика обновлён",
         "app_id": application.app_id,
         "status": application.status
+    }), 200
+
+
+
+# Получить полное резюме из отклика.
+# При первом просмотре статус меняется на viewed.
+@applications_bp.route("/<int:app_id>/resume", methods=["GET"])
+@token_required
+def get_application_resume(app_id):
+    user = g.current_user
+
+    if user.role != "employer":
+        return jsonify({"error": "Доступ только для работодателей"}), 403
+
+    company = db_session.query(Company).filter_by(
+        user_id=user.user_id
+    ).first()
+
+    if not company:
+        return jsonify({"error": "Компания не найдена"}), 404
+
+    application = db_session.query(Application).filter_by(
+        app_id=app_id
+    ).first()
+
+    if not application:
+        return jsonify({"error": "Отклик не найден"}), 404
+
+    # Проверяем, что отклик относится к вакансии этой компании
+    vacancy = db_session.query(Vacancy).filter_by(
+        vac_id=application.vac_id,
+        comp_id=company.comp_id
+    ).first()
+
+    if not vacancy:
+        return jsonify({"error": "Нет доступа к этому резюме"}), 403
+
+    resume = db_session.query(Resume).filter_by(
+        res_id=application.res_id
+    ).first()
+
+    if not resume:
+        return jsonify({"error": "Резюме не найдено"}), 404
+
+    # Меняем только pending на viewed.
+    # invited и rejected остаются без изменений.
+    if application.status == "pending":
+        application.status = "viewed"
+        db_session.commit()
+
+    return jsonify({
+        "application": {
+            "app_id": application.app_id,
+            "status": application.status
+        },
+        "resume": {
+            "res_id": resume.res_id,
+            "res_title": resume.res_title,
+            "gender": resume.gender,
+            "birth_date": (
+                resume.birth_date.isoformat()
+                if resume.birth_date else None
+            ),
+            "salary_expectation": resume.salary_expectation,
+            "professional_area": resume.professional_area,
+            "education": resume.education,
+            "skills": resume.skills,
+            "experience": resume.experience
+        }
     }), 200

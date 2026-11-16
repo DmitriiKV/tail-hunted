@@ -10,6 +10,9 @@ import VacancyPage from "./pages/VacancyPage";
 import VacanciesListPage from "./pages/VacanciesListPage";
 import MyVacanciesPage from "./pages/MyVacanciesPage";
 import ResumesListPage from "./pages/ResumesListPage";
+import MyApplicationsPage from "./pages/MyApplicationsPage";
+import EmployerApplicationsPage from "./pages/EmployerApplicationsPage";
+import ApplicationResumePage from "./pages/ApplicationResumePage";
 
 export default function App() {
   return (
@@ -44,7 +47,30 @@ export default function App() {
           <Route path="/resumes" element={
             <ProtectedRoute role="employer"><ResumesListPage /></ProtectedRoute>
           } />
-
+          <Route
+            path="/my-applications"
+            element={
+              <ProtectedRoute role="candidate">
+                <MyApplicationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/vacancy/:id/applications"
+            element={
+              <ProtectedRoute role="employer">
+                <EmployerApplicationsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/application/:appId/resume"
+            element={
+              <ProtectedRoute role="employer">
+                <ApplicationResumePage />
+              </ProtectedRoute>
+            }
+          />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

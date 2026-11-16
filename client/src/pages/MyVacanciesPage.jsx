@@ -57,6 +57,9 @@ export default function MyVacanciesPage() {
             <Link to={`/vacancy/${v.vac_id}/edit`} className="btn-small">
               Редактировать
             </Link>
+            <Link to={`/vacancy/${v.vac_id}/applications`} className="btn-small">
+              Отклики
+            </Link>
             <button
               className="btn-small danger"
               onClick={() => handleDelete(v.vac_id, v.vac_title)}
