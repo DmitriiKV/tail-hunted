@@ -1,36 +1,91 @@
+
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router-dom";
+
 import { resumeService } from "../services/resumeService";
+import { matchingService } from "../services/matchingService";
 
 export default function ResumeDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const vacancyId = location.state?.vacancyId;
+  const fromRecommendations =
+    location.state?.fromRecommendations === true && !!vacancyId;
 
   const [resume, setResume] = useState(null);
+  const [matchScore, setMatchScore] = useState(null);
+  const [scoreLoading, setScoreLoading] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [requestLoading, setRequestLoading] = useState(false);
   const [requestMessage, setRequestMessage] = useState("");
 
-  const loadResume = async () => {
-    try {
-      setLoading(true);
-      setError("");
-
-      const data = await resumeService.getById(id);
-      setResume(data);
-    } catch (err) {
-      setError(
-        err.response?.data?.error || "Не удалось загрузить резюме"
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadResume();
-  }, [id]);
+    let active = true;
+
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const data = await resumeService.getById(id);
+
+        if (active) {
+          setResume(data);
+        }
+
+        if (fromRecommendations) {
+          setScoreLoading(true);
+
+          try {
+            const scoreData =
+              await matchingService.getResumeMatchScore(
+                id,
+                vacancyId
+              );
+
+            if (active) {
+              setMatchScore(scoreData.score);
+            }
+          } catch (err) {
+            console.error(
+              "Не удалось загрузить процент совпадения:",
+              err
+            );
+          } finally {
+            if (active) {
+              setScoreLoading(false);
+            }
+          }
+        }
+      } catch (err) {
+        if (active) {
+          setError(
+            err.response?.data?.error ||
+              "Не удалось загрузить резюме"
+          );
+        }
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadData();
+
+    return () => {
+      active = false;
+    };
+  }, [id, vacancyId, fromRecommendations]);
 
   const handleRequestContacts = async () => {
     try {
@@ -44,7 +99,8 @@ export default function ResumeDetailsPage() {
       );
     } catch (err) {
       setRequestMessage(
-        err.response?.data?.error || "Не удалось отправить запрос"
+        err.response?.data?.error ||
+          "Не удалось отправить запрос"
       );
     } finally {
       setRequestLoading(false);
@@ -52,7 +108,11 @@ export default function ResumeDetailsPage() {
   };
 
   if (loading) {
-    return <div className="auth-container">Загрузка резюме...</div>;
+    return (
+      <div className="auth-container">
+        Загрузка резюме...
+      </div>
+    );
   }
 
   if (error) {
@@ -69,6 +129,40 @@ export default function ResumeDetailsPage() {
   return (
     <div className="auth-container" style={{ maxWidth: 900 }}>
       <h1>{resume.res_title}</h1>
+
+      {fromRecommendations && (
+        <div
+          style={{
+            padding: 16,
+            marginBottom: 20,
+            border: "1px solid #d1e7dd",
+            background: "#f0fdf4",
+            borderRadius: 10,
+          }}
+        >
+
+          {scoreLoading ? (
+            <p style={{ marginBottom: 0 }}>
+              Рассчитываем совпадение...
+            </p>
+          ) : matchScore !== null ? (
+            <p
+              style={{
+                fontSize: 26,
+                fontWeight: 700,
+                color: "#15803d",
+                margin: "8px 0 0",
+              }}
+            >
+              Подходит вам на {matchScore}%
+            </p>
+          ) : (
+            <p style={{ marginBottom: 0 }}>
+              Не удалось рассчитать процент совпадения.
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="vacancy-card">
         <div className="vacancy-card-body">
@@ -142,7 +236,7 @@ export default function ResumeDetailsPage() {
       </div>
 
       <div className="auth-footer">
-        <Link to="/resumes">← К списку резюме</Link>
+        <Link to="/resumes">← К списку кандидатов</Link>
       </div>
     </div>
   );

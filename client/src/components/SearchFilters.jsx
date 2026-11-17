@@ -27,8 +27,8 @@ export default function SearchFilters({
     gap: 6,
   };
 
-  const activeFiltersCount = Object.values(filters).filter(
-    (value) => value !== "" && value !== filters.q
+  const activeFiltersCount = Object.entries(filters).filter(
+    ([key, value]) => key !== "q" && value !== ""
   ).length;
 
   const sortOptions = [
@@ -48,29 +48,47 @@ export default function SearchFilters({
     fontWeight: 500,
   };
 
+  const showSort =
+    sort !== undefined && typeof onSortChange === "function";
+
   return (
     <div style={{ marginBottom: 24 }}>
-      {/* Постоянно видимое поле общего поиска */}
-      <div style={{ marginBottom: 12 }}>
-        <label
-          htmlFor="general-search"
+      {/* Общее поле поиска с иконкой */}
+      <div style={{ marginBottom: 12, position: "relative" }}>
+        <svg
+          width="19"
+          height="19"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#667085"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
           style={{
-            display: "block",
-            marginBottom: 6,
-            fontWeight: 500,
+            position: "absolute",
+            left: 13,
+            top: "50%",
+            transform: "translateY(-50%)",
+            pointerEvents: "none",
           }}
+          aria-hidden="true"
         >
-          Поиск
-        </label>
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.35-4.35" />
+        </svg>
 
         <input
           id="general-search"
           name="q"
           type="text"
-          value={filters.q}
+          value={filters.q || ""}
           onChange={onChange}
           placeholder="Название, профессия, навыки и описание..."
-          style={inputStyle}
+          aria-label="Поиск вакансий"
+          style={{
+            ...inputStyle,
+            paddingLeft: 42,
+          }}
         />
       </div>
 
@@ -96,17 +114,19 @@ export default function SearchFilters({
           {filtersOpen ? " ▲" : " ▼"}
         </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setSortOpen((prev) => !prev);
-            setFiltersOpen(false);
-          }}
-          style={toggleButtonStyle}
-        >
-          ↕ Сортировка
-          {sortOpen ? " ▲" : " ▼"}
-        </button>
+        {showSort && (
+          <button
+            type="button"
+            onClick={() => {
+              setSortOpen((prev) => !prev);
+              setFiltersOpen(false);
+            }}
+            style={toggleButtonStyle}
+          >
+            ↕ Сортировка
+            {sortOpen ? " ▲" : " ▼"}
+          </button>
+        )}
       </div>
 
       {/* Дополнительные фильтры */}
@@ -119,55 +139,69 @@ export default function SearchFilters({
             marginBottom: 12,
           }}
         >
-          <h3 style={{ marginTop: 0 }}>Дополнительные фильтры</h3>
+          <h3 style={{ marginTop: 0 }}>
+            Дополнительные фильтры
+          </h3>
 
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gridTemplateColumns:
+                "repeat(auto-fit, minmax(180px, 1fr))",
               gap: 14,
             }}
           >
-            {fields.map((field) => (
-              <div
-                key={field.name}
-                style={{
-                  ...fieldStyle,
-                  gridColumn: field.fullWidth ? "1 / -1" : undefined,
-                }}
-              >
-                <label htmlFor={field.name}>{field.label}</label>
+            {fields
+              .filter((field) => field.name !== "q")
+              .map((field) => (
+                <div
+                  key={field.name}
+                  style={{
+                    ...fieldStyle,
+                    gridColumn: field.fullWidth
+                      ? "1 / -1"
+                      : undefined,
+                  }}
+                >
+                  <label htmlFor={field.name}>
+                    {field.label}
+                  </label>
 
-                {field.type === "select" ? (
-                  <select
-                    id={field.name}
-                    name={field.name}
-                    value={filters[field.name]}
-                    onChange={onChange}
-                    style={inputStyle}
-                  >
-                    <option value="">Любой</option>
+                  {field.type === "select" ? (
+                    <select
+                      id={field.name}
+                      name={field.name}
+                      value={filters[field.name] || ""}
+                      onChange={onChange}
+                      style={inputStyle}
+                    >
+                      <option value="">Любой</option>
 
-                    {field.options.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <input
-                    id={field.name}
-                    name={field.name}
-                    type={field.type || "text"}
-                    min={field.type === "number" ? 0 : undefined}
-                    value={filters[field.name]}
-                    onChange={onChange}
-                    placeholder={field.placeholder || ""}
-                    style={inputStyle}
-                  />
-                )}
-              </div>
-            ))}
+                      {field.options.map((option) => (
+                        <option
+                          key={option.value}
+                          value={option.value}
+                        >
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      id={field.name}
+                      name={field.name}
+                      type={field.type || "text"}
+                      min={
+                        field.type === "number" ? 0 : undefined
+                      }
+                      value={filters[field.name] || ""}
+                      onChange={onChange}
+                      placeholder={field.placeholder || ""}
+                      style={inputStyle}
+                    />
+                  )}
+                </div>
+              ))}
           </div>
 
           <button
@@ -180,8 +214,8 @@ export default function SearchFilters({
         </div>
       )}
 
-      {/* Сортировка */}
-      {sortOpen && (
+      {/* Сортировка — если она подключена */}
+      {showSort && sortOpen && (
         <div
           style={{
             padding: 18,
@@ -193,7 +227,10 @@ export default function SearchFilters({
         >
           <label
             htmlFor="sort-select"
-            style={{ display: "block", marginBottom: 8 }}
+            style={{
+              display: "block",
+              marginBottom: 8,
+            }}
           >
             Сортировать:
           </label>
@@ -201,11 +238,16 @@ export default function SearchFilters({
           <select
             id="sort-select"
             value={sort}
-            onChange={(event) => onSortChange(event.target.value)}
+            onChange={(event) =>
+              onSortChange(event.target.value)
+            }
             style={inputStyle}
           >
             {sortOptions.map((option) => (
-              <option key={option.value} value={option.value}>
+              <option
+                key={option.value}
+                value={option.value}
+              >
                 {option.label}
               </option>
             ))}

@@ -19,6 +19,8 @@ def resume_to_dict(r):
         "education": r.education,
         "skills": r.skills,
         "experience": r.experience,
+        "experience_level": r.experience_level,
+        "preferred_region": r.preferred_region or "Любой регион",
     }
 
 
@@ -50,6 +52,8 @@ def create_resume():
         education=data.get("education"),
         skills=data.get("skills"),
         experience=data.get("experience"),
+        experience_level=data.get("experience_level"),
+        preferred_region=data.get("preferred_region") or "Любой регион",
     )
     db_session.add(resume)
     db_session.commit()
@@ -87,8 +91,17 @@ def update_resume(res_id):
         except ValueError:
             return jsonify({"error": "Дата должна быть в формате YYYY-MM-DD"}), 400
 
-    for field in ["res_title", "gender", "salary_expectation",
-                  "professional_area", "education", "skills", "experience"]:
+    for field in [
+        "res_title",
+        "gender",
+        "salary_expectation",
+        "professional_area",
+        "education",
+        "skills",
+        "experience",
+        "experience_level",
+        "preferred_region",
+    ]:
         if field in data:
             setattr(resume, field, data[field])
 

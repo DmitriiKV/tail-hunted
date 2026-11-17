@@ -6,6 +6,8 @@ from routes.resumes import resumes_bp
 from routes.vacancies import vacancies_bp
 from routes.applications import applications_bp
 from routes.notifications import notifications_bp
+from routes.matching import matching_bp
+
 from db import db_session
 
 def create_app():
@@ -18,6 +20,7 @@ def create_app():
     app.register_blueprint(vacancies_bp)
     app.register_blueprint(applications_bp)
     app.register_blueprint(notifications_bp)
+    app.register_blueprint(matching_bp)
 
     @app.teardown_appcontext
     def shutdown_session(exception=None):

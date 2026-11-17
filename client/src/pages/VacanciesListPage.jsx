@@ -1,8 +1,10 @@
 
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { vacancyService } from "../services/vacancyService";
+
+import { matchingService } from "../services/matchingService";
 import SearchFilters from "../components/SearchFilters";
+
 import {
   getMyApplications,
   createApplication,
@@ -20,6 +22,11 @@ const initialFilters = {
 };
 
 const searchFields = [
+  {
+    name: "q",
+    label: "Поиск",
+    placeholder: "Название вакансии или ключевые слова",
+  },
   {
     name: "region",
     label: "Регион",
@@ -63,32 +70,109 @@ const searchFields = [
   },
 ];
 
+// Преобразуем зарплату в число
+const getSalaryValue = (salary) => {
+  if (salary === null || salary === undefined || salary === "") {
+    return null;
+  }
+
+  const value = Number(
+    String(salary).replace(/[^\d.-]/g, "")
+  );
+
+  return Number.isFinite(value) ? value : null;
+};
+
+// Преобразуем дату в число
+const getDateValue = (date) => {
+  if (!date) {
+    return null;
+  }
+
+  const value = new Date(date).getTime();
+
+  return Number.isFinite(value) ? value : null;
+};
+
+// Сортировка с сохранением рекомендованного порядка при равных значениях
+const sortVacancies = (vacancies, sortType) => {
+  return vacancies
+    .map((vacancy, index) => ({
+      vacancy,
+      originalIndex: index,
+    }))
+    .sort((a, b) => {
+      let valueA;
+      let valueB;
+      let direction = 1;
+
+      switch (sortType) {
+        case "oldest":
+          valueA = getDateValue(a.vacancy.vac_created_at);
+          valueB = getDateValue(b.vacancy.vac_created_at);
+          direction = 1;
+          break;
+
+        case "salary_asc":
+          valueA = getSalaryValue(a.vacancy.salary);
+          valueB = getSalaryValue(b.vacancy.salary);
+          direction = 1;
+          break;
+
+        case "salary_desc":
+          valueA = getSalaryValue(a.vacancy.salary);
+          valueB = getSalaryValue(b.vacancy.salary);
+          direction = -1;
+          break;
+
+        case "newest":
+        default:
+          valueA = getDateValue(a.vacancy.vac_created_at);
+          valueB = getDateValue(b.vacancy.vac_created_at);
+          direction = -1;
+          break;
+      }
+
+      // Вакансии без даты или зарплаты отправляем в конец
+      if (valueA === null && valueB !== null) {
+        return 1;
+      }
+
+      if (valueA !== null && valueB === null) {
+        return -1;
+      }
+
+      // Если значения одинаковые, сохраняем порядок рекомендаций
+      if (valueA === valueB) {
+        return a.originalIndex - b.originalIndex;
+      }
+
+      return (valueA - valueB) * direction;
+    })
+    .map((item) => item.vacancy);
+};
+
 export default function VacanciesListPage() {
   const [vacancies, setVacancies] = useState([]);
-  const [appliedVacancyIds, setAppliedVacancyIds] = useState(new Set());
+  const [appliedVacancyIds, setAppliedVacancyIds] = useState(
+    new Set()
+  );
 
   const [filters, setFilters] = useState(initialFilters);
   const [sort, setSort] = useState("newest");
-  const [page, setPage] = useState(1);
-
-  const [total, setTotal] = useState(0);
-  const [pages, setPages] = useState(0);
 
   const [loading, setLoading] = useState(true);
   const [applyingId, setApplyingId] = useState(null);
+
   const [error, setError] = useState("");
   const [applicationsError, setApplicationsError] = useState("");
 
-  // Загрузка вакансий с фильтрами, сортировкой и пагинацией
+  // Загружаем рекомендованную ленту с поиском и фильтрами
   useEffect(() => {
     let active = true;
 
     const timer = setTimeout(async () => {
-      const params = {
-        page,
-        per_page: 10,
-        sort,
-      };
+      const params = {};
 
       Object.entries(filters).forEach(([key, value]) => {
         if (value.trim() !== "") {
@@ -108,17 +192,21 @@ export default function VacanciesListPage() {
       setError("");
 
       try {
-        const data = await vacancyService.listAll(params);
+        const data =
+          await matchingService.getRecommendedVacancies(params);
 
         if (active) {
-          setVacancies(data.items || []);
-          setTotal(data.total || 0);
-          setPages(data.pages || 0);
+          setVacancies(
+            Array.isArray(data)
+              ? data.map((item) => item.vacancy)
+              : []
+          );
         }
       } catch (err) {
         if (active) {
           setError(
-            err.response?.data?.error || "Не удалось загрузить вакансии"
+            err.response?.data?.error ||
+              "Не удалось загрузить рекомендации"
           );
         }
       } finally {
@@ -132,23 +220,38 @@ export default function VacanciesListPage() {
       active = false;
       clearTimeout(timer);
     };
-  }, [filters, sort, page]);
+  }, [filters]);
 
-  // Загружаем информацию об откликах один раз
+  // Загружаем информацию об откликах
   useEffect(() => {
+    let active = true;
+
     getMyApplications()
       .then((response) => {
-        const applications = response.data.applications || [];
+        if (!active) return;
+
+        const applications =
+          response.data.applications || [];
 
         setAppliedVacancyIds(
-          new Set(applications.map((application) => application.vac_id))
+          new Set(
+            applications.map(
+              (application) => Number(application.vac_id)
+            )
+          )
         );
       })
       .catch(() => {
-        setApplicationsError(
-          "Не удалось загрузить информацию о ваших откликах"
-        );
+        if (active) {
+          setApplicationsError(
+            "Не удалось загрузить информацию о ваших откликах"
+          );
+        }
       });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Изменение фильтров
@@ -159,20 +262,11 @@ export default function VacanciesListPage() {
       ...prev,
       [name]: value,
     }));
-
-    setPage(1);
   };
 
   // Сброс фильтров
   const handleResetFilters = () => {
     setFilters({ ...initialFilters });
-    setPage(1);
-  };
-
-  // Изменение сортировки
-  const handleSortChange = (value) => {
-    setSort(value);
-    setPage(1);
   };
 
   // Отправка отклика
@@ -184,34 +278,31 @@ export default function VacanciesListPage() {
 
       setAppliedVacancyIds((prev) => {
         const updated = new Set(prev);
-        updated.add(vacancyId);
+        updated.add(Number(vacancyId));
         return updated;
       });
     } catch (err) {
       if (err.response?.status === 409) {
-        setAppliedVacancyIds((prev) => new Set([...prev, vacancyId]));
+        setAppliedVacancyIds(
+          (prev) => new Set([...prev, Number(vacancyId)])
+        );
       } else {
-        alert(err.response?.data?.error || "Не удалось отправить отклик");
+        alert(
+          err.response?.data?.error ||
+            "Не удалось отправить отклик"
+        );
       }
     } finally {
       setApplyingId(null);
     }
   };
 
-  // Номера страниц рядом с текущей
-  const getPageNumbers = () => {
-    const start = Math.max(1, page - 2);
-    const end = Math.min(pages, page + 2);
-
-    return Array.from(
-      { length: end - start + 1 },
-      (_, index) => start + index
-    );
-  };
+  // Применяем выбранную сортировку к рекомендованной ленте
+  const sortedVacancies = sortVacancies(vacancies, sort);
 
   return (
     <div className="auth-container" style={{ maxWidth: 900 }}>
-      <h1>Вакансии</h1>
+      <h1>Вакансии для вас</h1>
 
       <SearchFilters
         filters={filters}
@@ -219,32 +310,35 @@ export default function VacanciesListPage() {
         onReset={handleResetFilters}
         fields={searchFields}
         sort={sort}
-        onSortChange={handleSortChange}
+        onSortChange={setSort}
       />
 
       {applicationsError && (
         <p className="error">{applicationsError}</p>
       )}
 
-      <h2>Результаты поиска</h2>
-
       {!loading && !error && (
         <p style={{ color: "#667085", fontSize: 14 }}>
-          Найдено вакансий: {total}
+          Найдено вакансий: {sortedVacancies.length}
         </p>
       )}
 
-      {loading && <p>Загрузка вакансий...</p>}
+      {loading && <p>Подбираем вакансии...</p>}
 
       {error && <p className="error">{error}</p>}
 
-      {!loading && !error && vacancies.length === 0 && (
-        <p>По вашему запросу вакансий не найдено.</p>
+      {!loading && !error && sortedVacancies.length === 0 && (
+        <p>
+          Подходящих вакансий не найдено. Попробуйте изменить
+          параметры поиска или заполнить резюме подробнее.
+        </p>
       )}
 
       {!error &&
-        vacancies.map((v) => {
-          const alreadyApplied = appliedVacancyIds.has(v.vac_id);
+        sortedVacancies.map((v) => {
+          const alreadyApplied = appliedVacancyIds.has(
+            Number(v.vac_id)
+          );
 
           return (
             <div
@@ -254,11 +348,16 @@ export default function VacanciesListPage() {
                 border: "1px solid #e5e7eb",
                 borderRadius: 10,
                 marginBottom: 12,
+                background: "#fff",
               }}
             >
-              <h3 style={{ margin: "0 0 6px" }}>{v.vac_title}</h3>
+              <h3 style={{ margin: "0 0 6px" }}>
+                {v.vac_title}
+              </h3>
+
               <Link
                 to={`/vacancy/${v.vac_id}`}
+                state={{ fromRecommendations: true }}
                 style={{
                   display: "inline-block",
                   marginBottom: 10,
@@ -268,6 +367,7 @@ export default function VacanciesListPage() {
               >
                 Подробнее →
               </Link>
+
               <p
                 style={{
                   margin: "0 0 6px",
@@ -275,7 +375,9 @@ export default function VacanciesListPage() {
                   fontWeight: 500,
                 }}
               >
-                {v.salary ? `${v.salary} ₽` : "з/п не указана"}
+                {v.salary
+                  ? `${v.salary} ₽`
+                  : "з/п не указана"}
               </p>
 
               <p
@@ -285,15 +387,36 @@ export default function VacanciesListPage() {
                   fontSize: 14,
                 }}
               >
-                {v.vac_region} · {v.experience_required || "опыт не указан"} ·{" "}
-                {v.employment_type}
+                {v.vac_region || "Регион не указан"} ·{" "}
+                {v.experience_required || "опыт не указан"} ·{" "}
+                {v.employment_type || "тип занятости не указан"}
               </p>
 
-              <p style={{ margin: "0 0 6px", fontSize: 14 }}>
-                {v.skills_required}
-              </p>
+              {v.comp_name && (
+                <p
+                  style={{
+                    margin: "0 0 6px",
+                    fontSize: 14,
+                    fontWeight: 500,
+                  }}
+                >
+                  {v.comp_name}
+                </p>
+              )}
 
-              <p style={{ margin: 0, fontSize: 14, color: "#475467" }}>
+              {v.skills_required && (
+                <p style={{ margin: "0 0 6px", fontSize: 14 }}>
+                  {v.skills_required}
+                </p>
+              )}
+
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 14,
+                  color: "#475467",
+                }}
+              >
                 {v.vac_description}
               </p>
 
@@ -307,7 +430,8 @@ export default function VacanciesListPage() {
                     className="btn-small"
                     onClick={() => handleApply(v.vac_id)}
                     disabled={
-                      applyingId === v.vac_id || applicationsError !== ""
+                      applyingId === v.vac_id ||
+                      applicationsError !== ""
                     }
                   >
                     {applyingId === v.vac_id
@@ -319,50 +443,6 @@ export default function VacanciesListPage() {
             </div>
           );
         })}
-
-      {!loading && !error && pages > 1 && (
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            gap: 8,
-            flexWrap: "wrap",
-            marginTop: 24,
-          }}
-        >
-          <button
-            type="button"
-            disabled={page === 1}
-            onClick={() => setPage((prev) => prev - 1)}
-          >
-            ← Назад
-          </button>
-
-          {getPageNumbers().map((pageNumber) => (
-            <button
-              key={pageNumber}
-              type="button"
-              onClick={() => setPage(pageNumber)}
-              disabled={pageNumber === page}
-              style={{
-                fontWeight: pageNumber === page ? "bold" : "normal",
-                background: pageNumber === page ? "#e5e7eb" : undefined,
-              }}
-            >
-              {pageNumber}
-            </button>
-          ))}
-
-          <button
-            type="button"
-            disabled={page === pages}
-            onClick={() => setPage((prev) => prev + 1)}
-          >
-            Вперёд →
-          </button>
-        </div>
-      )}
 
       <div className="auth-footer">
         <Link to="/my-applications">Мои отклики</Link>

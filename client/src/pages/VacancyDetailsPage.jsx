@@ -1,16 +1,29 @@
+
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useLocation,
+} from "react-router-dom";
+
 import { vacancyService } from "../services/vacancyService";
 import {
   createApplication,
   getMyApplications,
 } from "../services/applicationService";
+import { matchingService } from "../services/matchingService";
 
 export default function VacancyDetailsPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const fromRecommendations =
+    location.state?.fromRecommendations === true;
 
   const [vacancy, setVacancy] = useState(null);
+  const [matchScore, setMatchScore] = useState(null);
   const [alreadyApplied, setAlreadyApplied] = useState(false);
 
   const [loading, setLoading] = useState(true);
@@ -35,7 +48,8 @@ export default function VacancyDetailsPage() {
       } catch (err) {
         if (active) {
           setError(
-            err.response?.data?.error || "Не удалось загрузить вакансию"
+            err.response?.data?.error ||
+              "Не удалось загрузить вакансию"
           );
         }
       } finally {
@@ -50,7 +64,8 @@ export default function VacancyDetailsPage() {
 
         if (active) {
           const hasApplication = applications.some(
-            (application) => Number(application.vac_id) === Number(id)
+            (application) =>
+              Number(application.vac_id) === Number(id)
           );
 
           setAlreadyApplied(hasApplication);
@@ -66,6 +81,20 @@ export default function VacancyDetailsPage() {
           setApplicationsLoading(false);
         }
       }
+
+      // Получаем процент совпадения, только если пришли из ленты рекомендаций
+      if (fromRecommendations) {
+        try {
+          const response =
+            await matchingService.getVacancyMatchScore(id);
+
+          if (active) {
+            setMatchScore(response.score);
+          }
+        } catch {
+          // Если оценку получить не удалось, просто не показываем её
+        }
+      }
     };
 
     loadData();
@@ -73,7 +102,7 @@ export default function VacancyDetailsPage() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, fromRecommendations]);
 
   const handleApply = async () => {
     setApplying(true);
@@ -90,7 +119,8 @@ export default function VacancyDetailsPage() {
         setSuccess("Вы уже откликались на эту вакансию.");
       } else {
         setApplyError(
-          err.response?.data?.error || "Не удалось отправить отклик"
+          err.response?.data?.error ||
+            "Не удалось отправить отклик"
         );
       }
     } finally {
@@ -130,6 +160,21 @@ export default function VacancyDetailsPage() {
   return (
     <div className="auth-container" style={{ maxWidth: 800 }}>
       <h1>{vacancy.vac_title}</h1>
+
+      {fromRecommendations && matchScore !== null && (
+        <div
+          style={{
+            marginBottom: 20,
+            padding: "12px 16px",
+            background: "#eff8ff",
+            borderRadius: 8,
+            color: "#175cd3",
+            fontWeight: 600,
+          }}
+        >
+          Подходит вам на {Math.round(Number(matchScore))}%
+        </div>
+      )}
 
       <div className="vacancy-card">
         <div className="vacancy-card-body">
@@ -184,7 +229,9 @@ export default function VacancyDetailsPage() {
           <p style={{ color: "#667085", fontSize: 13 }}>
             Опубликована:{" "}
             {vacancy.vac_created_at
-              ? new Date(vacancy.vac_created_at).toLocaleDateString("ru-RU")
+              ? new Date(vacancy.vac_created_at).toLocaleDateString(
+                  "ru-RU"
+                )
               : "Дата не указана"}
           </p>
         </div>
@@ -243,7 +290,11 @@ export default function VacancyDetailsPage() {
           <button
             className="btn-small"
             onClick={handleApply}
-            disabled={applying || applicationsLoading || !!applicationsError}
+            disabled={
+              applying ||
+              applicationsLoading ||
+              !!applicationsError
+            }
           >
             {applying
               ? "Отправка..."

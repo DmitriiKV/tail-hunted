@@ -1,5 +1,4 @@
-
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   getVacancyApplications,
@@ -13,6 +12,13 @@ const statusLabels = {
   rejected: "Отказ",
 };
 
+const statusColors = {
+  pending: { background: "#fff3cd", color: "#856404" },
+  viewed: { background: "#eaf2ff", color: "#2457a7" },
+  invited: { background: "#d1e7dd", color: "#0f5132" },
+  rejected: { background: "#f8d7da", color: "#842029" },
+};
+
 export default function EmployerApplicationsPage() {
   const { id } = useParams();
 
@@ -21,18 +27,25 @@ export default function EmployerApplicationsPage() {
   const [error, setError] = useState("");
   const [updatingId, setUpdatingId] = useState(null);
 
-  useEffect(() => {
-    getVacancyApplications(id)
-      .then((response) => {
-        setApplications(response.data.applications || []);
-      })
-      .catch((err) => {
-        setError(
-          err.response?.data?.error || "Не удалось загрузить отклики"
-        );
-      })
-      .finally(() => setLoading(false));
+  const loadApplications = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      const response = await getVacancyApplications(id);
+      setApplications(response.data.applications || []);
+    } catch (err) {
+      setError(
+        err.response?.data?.error || "Не удалось загрузить отклики"
+      );
+    } finally {
+      setLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    loadApplications();
+  }, [loadApplications]);
 
   const handleStatusChange = async (appId, newStatus) => {
     setUpdatingId(appId);
@@ -58,12 +71,37 @@ export default function EmployerApplicationsPage() {
   };
 
   if (loading) {
-    return <div className="auth-container">Загрузка...</div>;
+    return (
+      <div className="auth-container">
+        <p>Загрузка откликов...</p>
+      </div>
+    );
   }
 
   return (
     <div className="auth-container" style={{ maxWidth: 720 }}>
-      <h1>Отклики на вакансию</h1>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}
+      >
+        <h1 style={{ margin: 0 }}>
+          Отклики на вакансию ({applications.length})
+        </h1>
+
+        <button
+          type="button"
+          className="btn-secondary"
+          onClick={loadApplications}
+          disabled={loading}
+        >
+          Обновить
+        </button>
+      </div>
 
       {error && <p className="error">{error}</p>}
 
@@ -75,30 +113,54 @@ export default function EmployerApplicationsPage() {
 
       {applications.map((application) => {
         const resume = application.resume || {};
+        const statusStyle =
+          statusColors[application.status] || statusColors.pending;
 
         return (
-          <div key={application.app_id} className="vacancy-card">
+          <div
+            key={application.app_id}
+            className="vacancy-card"
+            style={{ marginTop: 16 }}
+          >
             <div className="vacancy-card-body">
-              <h3>{resume.res_title || "Резюме без названия"}</h3>
+              <h3>
+                {resume.res_title || "Резюме без названия"}
+              </h3>
 
-              <p style={{ margin: "0 0 6px", color: "#667085" }}>
+              <p style={{ margin: "0 0 10px", color: "#667085" }}>
                 Профессиональная область:{" "}
                 {resume.professional_area || "Не указана"}
               </p>
 
               <p style={{ margin: "0 0 10px" }}>
                 Статус:{" "}
-                <strong>
-                  {statusLabels[application.status] || application.status}
-                </strong>
+                <span
+                  style={{
+                    ...statusStyle,
+                    display: "inline-block",
+                    padding: "4px 9px",
+                    borderRadius: 12,
+                    fontSize: 13,
+                    fontWeight: 600,
+                  }}
+                >
+                  {statusLabels[application.status] ||
+                    application.status}
+                </span>
               </p>
 
-              <p style={{ margin: 0, fontSize: 13, color: "#667085" }}>
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 13,
+                  color: "#667085",
+                }}
+              >
                 Дата отклика:{" "}
                 {application.app_created_at
-                  ? new Date(application.app_created_at).toLocaleDateString(
-                      "ru-RU"
-                    )
+                  ? new Date(
+                      application.app_created_at
+                    ).toLocaleDateString("ru-RU")
                   : "Не указана"}
               </p>
 
@@ -114,7 +176,10 @@ export default function EmployerApplicationsPage() {
               <div style={{ marginTop: 14 }}>
                 <label
                   htmlFor={`status-${application.app_id}`}
-                  style={{ display: "block", marginBottom: 6 }}
+                  style={{
+                    display: "block",
+                    marginBottom: 6,
+                  }}
                 >
                   Изменить статус:
                 </label>
@@ -136,7 +201,9 @@ export default function EmployerApplicationsPage() {
                     maxWidth: "100%",
                   }}
                 >
-                  <option value="pending">Ожидает рассмотрения</option>
+                  <option value="pending">
+                    Ожидает рассмотрения
+                  </option>
                   <option value="viewed">Просмотрено</option>
                   <option value="invited">Приглашение</option>
                   <option value="rejected">Отказ</option>
@@ -154,7 +221,9 @@ export default function EmployerApplicationsPage() {
       })}
 
       <div className="auth-footer">
-        <Link to="/my-vacancies">← К моим вакансиям</Link>
+        <Link to="/my-vacancies">
+          ← К моим вакансиям
+        </Link>
       </div>
     </div>
   );
