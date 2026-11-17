@@ -16,3 +16,9 @@ class User(Base):
     
     company = relationship("Company", back_populates="user", uselist=False)
     resumes = relationship("Resume", back_populates="user")
+
+    notifications = relationship(
+    "Notification",
+    back_populates="user",
+    cascade="all, delete-orphan"
+)

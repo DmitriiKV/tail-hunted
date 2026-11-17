@@ -7,7 +7,8 @@ from alembic import context
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
-from db.models import User, Company, Resume, Vacancy, Application  # noqa
+from db.models import User, Company, Resume, Vacancy, Application, Notification
+
 from db.database import Base, DATABASE_URL
 
 config = context.config

@@ -6,6 +6,7 @@ from db import db_session
 from db.models import Application, Resume, Vacancy, Company, User
 from utils.auth_middleware import token_required
 
+from services.notification_service import create_notification
 
 applications_bp = Blueprint(
     "applications",
@@ -59,10 +60,31 @@ def create_application():
 
     try:
         db_session.add(application)
+        db_session.flush()
+
+        # Находим компанию, которой принадлежит вакансия
+        company = db_session.query(Company).filter_by(
+            comp_id=vacancy.comp_id
+        ).first()
+
+        # Уведомляем работодателя о новом отклике
+        if company:
+            create_notification(
+                user_id=company.user_id,
+                app_id=application.app_id,
+                title="Новый отклик",
+                message=f"На вашу вакансию «{vacancy.vac_title}» поступил новый отклик",
+                notification_type="new_application"
+            )
+
         db_session.commit()
+
     except IntegrityError:
         db_session.rollback()
-        return jsonify({"error": "Отклик на эту вакансию уже существует"}), 409
+        return jsonify({
+            "error": "Отклик на эту вакансию уже существует"
+        }), 409
+
 
     return jsonify({
         "message": "Отклик успешно создан",
@@ -169,16 +191,7 @@ def get_vacancy_applications(vac_id):
             "resume": {
                 "res_id": resume.res_id,
                 "res_title": resume.res_title,
-                "gender": resume.gender,
-                "birth_date": (
-                    resume.birth_date.isoformat()
-                    if resume.birth_date else None
-                ),
-                "salary_expectation": resume.salary_expectation,
-                "professional_area": resume.professional_area,
-                "education": resume.education,
-                "skills": resume.skills,
-                "experience": resume.experience
+                "professional_area": resume.professional_area
             }
         })
 
@@ -224,8 +237,38 @@ def update_application_status(app_id):
     if not vacancy:
         return jsonify({"error": "Нет доступа к этому отклику"}), 403
 
+    old_status = application.status
+
     application.status = new_status
+
+    # Уведомляем соискателя только при реальном изменении статуса
+    if old_status != new_status and new_status in ["invited", "rejected"]:
+
+        resume = db_session.query(Resume).filter_by(
+            res_id=application.res_id
+        ).first()
+
+        if resume:
+            if new_status == "invited":
+                create_notification(
+                    user_id=resume.user_id,
+                    app_id=application.app_id,
+                    title="Вас пригласили на собеседование",
+                    message=f"Работодатель пригласил вас по вакансии «{vacancy.vac_title}»",
+                    notification_type="invitation"
+                )
+
+            elif new_status == "rejected":
+                create_notification(
+                    user_id=resume.user_id,
+                    app_id=application.app_id,
+                    title="Изменился статус отклика",
+                    message=f"По вакансии «{vacancy.vac_title}» получен отказ",
+                    notification_type="rejection"
+                )
+
     db_session.commit()
+
 
     return jsonify({
         "message": "Статус отклика обновлён",
@@ -277,8 +320,18 @@ def get_application_resume(app_id):
 
     # Меняем только pending на viewed.
     # invited и rejected остаются без изменений.
+    
     if application.status == "pending":
         application.status = "viewed"
+
+        create_notification(
+            user_id=resume.user_id,
+            app_id=application.app_id,
+            title="Ваше резюме просмотрено",
+            message=f"Работодатель просмотрел ваше резюме по вакансии «{vacancy.vac_title}»",
+            notification_type="resume_viewed"
+        )
+
         db_session.commit()
 
     return jsonify({
