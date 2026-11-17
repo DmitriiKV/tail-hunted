@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, g
 from db import db_session
 from db.models import Vacancy, Company
 from utils.auth_middleware import token_required
+from services.search_service import apply_search
 
 vacancies_bp = Blueprint("vacancies", __name__, url_prefix="/api/vacancies")
 
@@ -80,9 +81,84 @@ def create_vacancy():
 
 @vacancies_bp.route("", methods=["GET"])
 def list_vacancies():
-    vacancies = db_session.query(Vacancy).order_by(Vacancy.vac_created_at.desc()).all()
-    return jsonify([vacancy_to_dict(v) for v in vacancies])
+    query = db_session.query(Vacancy)
 
+    # Существующие фильтры
+    filters = {
+        "q": request.args.get("q", ""),
+        "min_salary": request.args.get("min_salary", type=int),
+        "max_salary": request.args.get("max_salary", type=int),
+        "text": {
+            "vac_region": request.args.get("region", ""),
+            "specialization": request.args.get("specialization", ""),
+            "employment_type": request.args.get("employment_type", ""),
+            "schedule": request.args.get("schedule", ""),
+            "experience_required": request.args.get("experience", ""),
+            "skills_required": request.args.get("skills", ""),
+        }
+    }
+
+    query = apply_search(
+        query=query,
+        model=Vacancy,
+        search_fields=[
+            "vac_title",
+            "specialization",
+            "employment_type",
+            "schedule",
+            "experience_required",
+            "skills_required",
+            "vac_description",
+            "vac_region",
+        ],
+        filters=filters,
+    )
+
+    # Пагинация
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+
+    page = max(page or 1, 1)
+    per_page = min(max(per_page or 10, 1), 50)
+
+    # Считаем количество записей после применения фильтров
+    total = query.count()
+    pages = (total + per_page - 1) // per_page
+
+    # Сортировка
+    sort = request.args.get("sort", "newest")
+
+    if sort == "oldest":
+        query = query.order_by(
+            Vacancy.vac_created_at.asc(),
+            Vacancy.vac_id.asc()
+        )
+    elif sort == "salary_asc":
+        query = query.order_by(
+            Vacancy.salary.asc().nullslast(),
+            Vacancy.vac_created_at.desc()
+        )
+    elif sort == "salary_desc":
+        query = query.order_by(
+            Vacancy.salary.desc().nullslast(),
+            Vacancy.vac_created_at.desc()
+        )
+    else:
+        query = query.order_by(
+            Vacancy.vac_created_at.desc(),
+            Vacancy.vac_id.desc()
+        )
+
+    # Получаем только записи текущей страницы
+    vacancies = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    return jsonify({
+        "items": [vacancy_to_dict(v) for v in vacancies],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": pages,
+    })
 
 @vacancies_bp.route("/my", methods=["GET"])
 @token_required

@@ -3,6 +3,7 @@ from datetime import datetime
 from db import db_session
 from db.models import Resume
 from utils.auth_middleware import token_required
+from services.search_service import apply_search
 
 resumes_bp = Blueprint("resumes", __name__, url_prefix="/api/resumes")
 
@@ -94,7 +95,81 @@ def update_resume(res_id):
     db_session.commit()
     return jsonify(resume_to_dict(resume))
 
+
+
 @resumes_bp.route("", methods=["GET"])
 def list_resumes():
-    resumes = db_session.query(Resume).order_by(Resume.res_id.desc()).all()
-    return jsonify([resume_to_dict(r) for r in resumes])
+    query = db_session.query(Resume)
+
+    # Существующие фильтры
+    filters = {
+        "q": request.args.get("q", ""),
+        "min_salary": request.args.get("min_salary", type=int),
+        "max_salary": request.args.get("max_salary", type=int),
+        "text": {
+            "res_title": request.args.get("title", ""),
+            "professional_area": request.args.get("specialization", ""),
+            "skills": request.args.get("skills", ""),
+            "education": request.args.get("education", ""),
+            "experience": request.args.get("experience", ""),
+        }
+    }
+
+    query = apply_search(
+        query=query,
+        model=Resume,
+        search_fields=[
+            "res_title",
+            "professional_area",
+            "education",
+            "skills",
+            "experience",
+        ],
+        filters=filters,
+    )
+
+    # Пагинация
+    page = request.args.get("page", 1, type=int)
+    per_page = request.args.get("per_page", 10, type=int)
+
+    page = max(page or 1, 1)
+    per_page = min(max(per_page or 10, 1), 50)
+
+    # Считаем количество записей после применения фильтров
+    total = query.count()
+    pages = (total + per_page - 1) // per_page
+
+    # Сортировка
+    sort = request.args.get("sort", "newest")
+
+    if sort == "oldest":
+        query = query.order_by(
+            Resume.res_created_at.asc(),
+            Resume.res_id.asc()
+        )
+    elif sort == "salary_asc":
+        query = query.order_by(
+            Resume.salary_expectation.asc().nullslast(),
+            Resume.res_created_at.desc()
+        )
+    elif sort == "salary_desc":
+        query = query.order_by(
+            Resume.salary_expectation.desc().nullslast(),
+            Resume.res_created_at.desc()
+        )
+    else:
+        query = query.order_by(
+            Resume.res_created_at.desc(),
+            Resume.res_id.desc()
+        )
+
+    # Получаем только записи текущей страницы
+    resumes = query.offset((page - 1) * per_page).limit(per_page).all()
+
+    return jsonify({
+        "items": [resume_to_dict(r) for r in resumes],
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "pages": pages,
+    })
