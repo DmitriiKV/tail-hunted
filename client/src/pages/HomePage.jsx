@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate, Link } from "react-router-dom";
@@ -18,11 +17,17 @@ export default function HomePage() {
   const [company, setCompany] = useState(null);
   const [resume, setResume] = useState(null);
 
-  // Состояние уведомлений
+  // Уведомления
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
 
+  // Запросы доступа к контактам
+  const [contactRequests, setContactRequests] = useState([]);
+  const [contactRequestError, setContactRequestError] = useState("");
+  const [contactRequestLoadingId, setContactRequestLoadingId] = useState(null);
+
+  // Загрузка данных пользователя
   useEffect(() => {
     if (user?.role === "employer") {
       companyService
@@ -36,6 +41,8 @@ export default function HomePage() {
         .getMy()
         .then((list) => setResume(list[0] || null))
         .catch(() => setResume(null));
+
+      loadContactRequests();
     }
 
     if (user) {
@@ -49,10 +56,8 @@ export default function HomePage() {
       setNotificationsLoading(true);
 
       const response = await getNotifications();
-
-      // Поддерживаем оба варианта ответа API:
-      // массив уведомлений или объект { notifications: [...] }
       const data = response.data;
+
       const list = Array.isArray(data)
         ? data
         : data.notifications || [];
@@ -63,6 +68,49 @@ export default function HomePage() {
       console.error("Ошибка загрузки уведомлений:", error);
     } finally {
       setNotificationsLoading(false);
+    }
+  };
+
+  // Загрузка запросов на доступ к контактам
+  const loadContactRequests = async () => {
+    try {
+      setContactRequestError("");
+
+      const data = await resumeService.getContactRequests();
+      setContactRequests(data.requests || []);
+    } catch (error) {
+      console.error("Ошибка загрузки запросов:", error);
+      setContactRequestError(
+        "Не удалось загрузить запросы на доступ к контактам"
+      );
+    }
+  };
+
+  // Ответ кандидата на запрос работодателя
+  const handleContactRequestResponse = async (requestId, status) => {
+    try {
+      setContactRequestLoadingId(requestId);
+      setContactRequestError("");
+
+      await resumeService.respondToContactRequest(requestId, status);
+
+      setContactRequests((prev) =>
+        prev.map((item) =>
+          item.request_id === requestId
+            ? { ...item, status }
+            : item
+        )
+      );
+
+      await loadNotifications();
+    } catch (error) {
+      console.error("Ошибка обработки запроса:", error);
+
+      setContactRequestError(
+        error.response?.data?.error || "Не удалось обработать запрос"
+      );
+    } finally {
+      setContactRequestLoadingId(null);
     }
   };
 
@@ -246,6 +294,119 @@ export default function HomePage() {
           </div>
         )}
       </div>
+
+      {/* Запросы работодателей на доступ к контактам */}
+      {user?.role === "candidate" && (
+        <div className="info-card" style={{ marginTop: 20 }}>
+          <h2 style={{ marginTop: 0 }}>
+            Запросы на доступ к контактам
+          </h2>
+
+          {contactRequestError && (
+            <p style={{ color: "#dc3545" }}>
+              {contactRequestError}
+            </p>
+          )}
+
+          {contactRequests.length === 0 ? (
+            <p className="info-sub">
+              Пока нет запросов на доступ к вашим контактам
+            </p>
+          ) : (
+            <div style={{ marginTop: 15 }}>
+              {contactRequests.map((request) => (
+                <div
+                  key={request.request_id}
+                  style={{
+                    padding: 14,
+                    marginBottom: 12,
+                    borderRadius: 8,
+                    background: "#f5f5f5",
+                    borderLeft: "3px solid #3478db",
+                  }}
+                >
+                  <div style={{ fontWeight: "bold" }}>
+                    {request.company_name || request.employer_name}
+                  </div>
+
+                  {request.company_name && (
+                    <div style={{ marginTop: 4 }}>
+                      Работодатель: {request.employer_name}
+                    </div>
+                  )}
+
+                  <p style={{ margin: "6px 0" }}>
+                    Запрос для резюме: {request.resume_title}
+                  </p>
+
+                  <small style={{ color: "#777" }}>
+                    {new Date(request.created_at).toLocaleString("ru-RU")}
+                  </small>
+
+                  {request.status === "pending" ? (
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: 10,
+                        flexWrap: "wrap",
+                        marginTop: 12,
+                      }}
+                    >
+                      <button
+                        onClick={() =>
+                          handleContactRequestResponse(
+                            request.request_id,
+                            "approved"
+                          )
+                        }
+                        disabled={
+                          contactRequestLoadingId === request.request_id
+                        }
+                        className="btn-primary"
+                      >
+                        {contactRequestLoadingId === request.request_id
+                          ? "Обработка..."
+                          : "Разрешить"}
+                      </button>
+
+                      <button
+                        onClick={() =>
+                          handleContactRequestResponse(
+                            request.request_id,
+                            "rejected"
+                          )
+                        }
+                        disabled={
+                          contactRequestLoadingId === request.request_id
+                        }
+                        className="btn-secondary"
+                      >
+                        Отклонить
+                      </button>
+                    </div>
+                  ) : (
+                    <p
+                      style={{
+                        marginBottom: 0,
+                        marginTop: 10,
+                        fontWeight: "bold",
+                        color:
+                          request.status === "approved"
+                            ? "#198754"
+                            : "#dc3545",
+                      }}
+                    >
+                      {request.status === "approved"
+                        ? "Вы разрешили доступ к контактам"
+                        : "Вы отклонили запрос"}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Основные действия */}
       <div

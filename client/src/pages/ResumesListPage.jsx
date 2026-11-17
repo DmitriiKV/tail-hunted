@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { resumeService } from "../services/resumeService";
@@ -246,6 +245,16 @@ export default function ResumesListPage() {
                 {r.experience}
               </p>
             )}
+
+            {/* Переход на подробную страницу резюме */}
+            <div style={{ marginTop: 14 }}>
+              <Link
+                to={`/resume/${r.res_id}`}
+                className="btn-primary"
+              >
+                Подробнее о кандидате
+              </Link>
+            </div>
           </div>
         ))}
 

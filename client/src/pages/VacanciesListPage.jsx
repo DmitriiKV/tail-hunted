@@ -257,7 +257,17 @@ export default function VacanciesListPage() {
               }}
             >
               <h3 style={{ margin: "0 0 6px" }}>{v.vac_title}</h3>
-
+              <Link
+                to={`/vacancy/${v.vac_id}`}
+                style={{
+                  display: "inline-block",
+                  marginBottom: 10,
+                  color: "#2563eb",
+                  fontSize: 14,
+                }}
+              >
+                Подробнее →
+              </Link>
               <p
                 style={{
                   margin: "0 0 6px",

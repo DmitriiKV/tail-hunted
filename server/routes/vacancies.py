@@ -178,9 +178,27 @@ def my_vacancies():
 @vacancies_bp.route("/<int:vac_id>", methods=["GET"])
 def get_vacancy(vac_id):
     vacancy = db_session.query(Vacancy).filter_by(vac_id=vac_id).first()
+
     if not vacancy:
         return jsonify({"error": "Вакансия не найдена"}), 404
-    return jsonify(vacancy_to_dict(vacancy))
+
+    result = vacancy_to_dict(vacancy)
+
+    company = vacancy.company
+
+    if company:
+        result["company"] = {
+            "comp_id": company.comp_id,
+            "comp_name": company.comp_name,
+            "comp_region": company.comp_region,
+            "address": company.address,
+            "size": company.size,
+            "comp_description": company.comp_description,
+        }
+    else:
+        result["company"] = None
+
+    return jsonify(result)
 
 
 @vacancies_bp.route("/<int:vac_id>", methods=["PATCH"])

@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, g
 from datetime import datetime
 from db import db_session
-from db.models import Resume
+from db.models import Resume, ContactAccessRequest, Notification
 from utils.auth_middleware import token_required
 from services.search_service import apply_search
 
@@ -98,7 +98,13 @@ def update_resume(res_id):
 
 
 @resumes_bp.route("", methods=["GET"])
+@token_required
 def list_resumes():
+    user = g.current_user
+
+    if user.role != "employer":
+        return jsonify({"error": "Только для работодателей"}), 403
+
     query = db_session.query(Resume)
 
     # Существующие фильтры
@@ -173,3 +179,192 @@ def list_resumes():
         "per_page": per_page,
         "pages": pages,
     })
+
+@resumes_bp.route("/<int:res_id>", methods=["GET"])
+@token_required
+def get_resume(res_id):
+    user = g.current_user
+
+    if user.role != "employer":
+        return jsonify({"error": "Только для работодателей"}), 403
+
+    resume = db_session.query(Resume).filter_by(res_id=res_id).first()
+
+    if not resume:
+        return jsonify({"error": "Резюме не найдено"}), 404
+
+    result = resume_to_dict(resume)
+
+    # Проверяем, разрешил ли кандидат этому работодателю
+    # просматривать свой email
+    approved_request = db_session.query(ContactAccessRequest).filter_by(
+        resume_id=resume.res_id,
+        employer_id=user.user_id,
+        status="approved"
+    ).first()
+
+    result["contact_email"] = (
+        resume.user.user_email if approved_request else None
+    )
+
+    return jsonify(result), 200
+
+@resumes_bp.route("/<int:res_id>/contact-request", methods=["POST"])
+@token_required
+def request_resume_contacts(res_id):
+    user = g.current_user
+
+    if user.role != "employer":
+        return jsonify({"error": "Только для работодателей"}), 403
+
+    resume = db_session.query(Resume).filter_by(res_id=res_id).first()
+
+    if not resume:
+        return jsonify({"error": "Резюме не найдено"}), 404
+
+    # Нельзя запрашивать контакты собственного резюме
+    if resume.user_id == user.user_id:
+        return jsonify({"error": "Нельзя запросить контакты собственного резюме"}), 400
+
+    existing_request = db_session.query(ContactAccessRequest).filter_by(
+        resume_id=resume.res_id,
+        employer_id=user.user_id
+    ).first()
+
+    if existing_request:
+        if existing_request.status == "pending":
+            return jsonify({"error": "Запрос уже отправлен"}), 409
+
+        if existing_request.status == "approved":
+            return jsonify({"error": "Доступ к контактам уже разрешён"}), 409
+
+        # Если ранее кандидат отказал, разрешаем отправить запрос повторно
+        existing_request.status = "pending"
+        existing_request.updated_at = datetime.utcnow()
+        contact_request = existing_request
+
+    else:
+        contact_request = ContactAccessRequest(
+            resume_id=resume.res_id,
+            employer_id=user.user_id,
+            candidate_id=resume.user_id,
+            status="pending"
+        )
+        db_session.add(contact_request)
+
+    db_session.flush()
+
+    notification = Notification(
+        user_id=resume.user_id,
+        title="Запрос контактных данных",
+        message="Работодатель хочет получить доступ к вашему email. Рассмотрите запрос.",
+        notification_type="contact_request",
+        is_read=False
+    )
+
+    db_session.add(notification)
+    db_session.commit()
+
+    return jsonify({
+        "message": "Запрос на получение контактов отправлен",
+        "request_id": contact_request.request_id,
+        "status": contact_request.status
+    }), 201
+
+@resumes_bp.route("/contact-requests", methods=["GET"])
+@token_required
+def get_contact_requests():
+    user = g.current_user
+
+    if user.role != "candidate":
+        return jsonify({"error": "Только для соискателей"}), 403
+
+    requests_list = (
+        db_session.query(ContactAccessRequest)
+        .filter_by(candidate_id=user.user_id)
+        .order_by(ContactAccessRequest.created_at.desc())
+        .all()
+    )
+
+    result = []
+
+    for item in requests_list:
+        employer = item.employer
+
+        result.append({
+            "request_id": item.request_id,
+            "resume_id": item.resume_id,
+            "resume_title": item.resume.res_title,
+            "employer_name": (
+                f"{employer.first_name} {employer.last_name}"
+            ),
+            "company_name": (
+                employer.company.comp_name
+                if employer.company else None
+            ),
+            "status": item.status,
+            "created_at": item.created_at.isoformat()
+        })
+
+    return jsonify({"requests": result}), 200
+
+@resumes_bp.route(
+    "/contact-requests/<int:request_id>",
+    methods=["PATCH"]
+)
+@token_required
+def respond_to_contact_request(request_id):
+    user = g.current_user
+
+    if user.role != "candidate":
+        return jsonify({"error": "Только для соискателей"}), 403
+
+    data = request.get_json() or {}
+    action = data.get("status")
+
+    if action not in ["approved", "rejected"]:
+        return jsonify({
+            "error": "Укажите status: approved или rejected"
+        }), 400
+
+    contact_request = db_session.query(ContactAccessRequest).filter_by(
+        request_id=request_id,
+        candidate_id=user.user_id
+    ).first()
+
+    if not contact_request:
+        return jsonify({"error": "Запрос не найден"}), 404
+
+    if contact_request.status != "pending":
+        return jsonify({
+            "error": "На этот запрос уже был дан ответ"
+        }), 409
+
+    contact_request.status = action
+    contact_request.updated_at = datetime.utcnow()
+
+    # Уведомляем работодателя о решении кандидата
+    notification = Notification(
+        user_id=contact_request.employer_id,
+        title="Ответ на запрос контактных данных",
+        message=(
+            "Кандидат разрешил просмотр email."
+            if action == "approved"
+            else "Кандидат отклонил запрос на просмотр email."
+        ),
+        notification_type="contact_response",
+        is_read=False
+    )
+
+    db_session.add(notification)
+    db_session.commit()
+
+    return jsonify({
+        "message": (
+            "Доступ к контактам разрешён"
+            if action == "approved"
+            else "Запрос отклонён"
+        ),
+        "request_id": contact_request.request_id,
+        "status": contact_request.status
+    }), 200
