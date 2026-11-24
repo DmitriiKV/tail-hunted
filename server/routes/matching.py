@@ -1,345 +1,183 @@
-
-from flask import Blueprint, jsonify, g, request
+from flask import Blueprint, g, jsonify, request
 from sqlalchemy import or_
 
 from db import db_session
-from db.models import Resume, Vacancy, Company
+from db.models import Company, Resume, Vacancy
+from utils.serializers import resume_to_dict, vacancy_to_dict
+from services.matching_service import (
+    calculate_match,
+    rank_resumes_for_vacancy,
+    rank_vacancies_for_resume,
+)
+from utils.access import error, own_vacancy, role_required
 from utils.auth_middleware import token_required
 
-from services.matching_service import (
-    rank_vacancies_for_resume,
-    rank_resumes_for_vacancy,
-    calculate_match,
-)
+matching_bp = Blueprint("matching", __name__, url_prefix="/api/matching")
+
+VACANCY_TEXT_FILTERS = {
+    "skills": Vacancy.skills_required,
+}
 
 
-matching_bp = Blueprint(
-    "matching",
-    __name__,
-    url_prefix="/api/matching",
-)
+def _experience_matches(value, args):
+    exp_type = args.get("experience_type", "").strip()
+    if not exp_type:
+        return True
+    import re
+    text = (value or "").strip().lower()
+    if exp_type == "none":
+        return text == "без опыта"
+    range_match = re.match(r"От\s+(\d+)\s+до\s+(\d+)\s+лет?", value or "", re.I)
+    more_match = re.match(r"Более\s+(\d+)\s+лет?", value or "", re.I)
+    if text == "без опыта":
+        candidate_min, candidate_max = 0, 0
+    elif range_match:
+        candidate_min, candidate_max = int(range_match.group(1)), int(range_match.group(2))
+    elif more_match:
+        candidate_min, candidate_max = int(more_match.group(1)) + 1, float("inf")
+    else:
+        return False
 
-
-def resume_to_dict(resume):
-    return {
-        "res_id": resume.res_id,
-        "res_title": resume.res_title,
-        "gender": resume.gender,
-        "birth_date": (
-            resume.birth_date.isoformat()
-            if resume.birth_date else None
-        ),
-        "salary_expectation": resume.salary_expectation,
-        "professional_area": resume.professional_area,
-        "education": resume.education,
-        "skills": resume.skills,
-        "experience": resume.experience,
-        "experience_level": resume.experience_level,
-        "preferred_region": resume.preferred_region,
-    }
-
-
-def vacancy_to_dict(vacancy):
-    return {
-        "vac_id": vacancy.vac_id,
-        "vac_title": vacancy.vac_title,
-        "specialization": vacancy.specialization,
-        "hiring_plan": vacancy.hiring_plan,
-        "employment_type": vacancy.employment_type,
-        "schedule": vacancy.schedule,
-        "salary": vacancy.salary,
-        "experience_required": vacancy.experience_required,
-        "skills_required": vacancy.skills_required,
-        "vac_description": vacancy.vac_description,
-        "vac_region": vacancy.vac_region,
-        "comp_id": vacancy.comp_id,
-        "comp_name": (
-            vacancy.company.comp_name
-            if vacancy.company else None
-        ),
-    }
+    if exp_type == "range":
+        min_value = args.get("experience_min", type=int)
+        max_value = args.get("experience_max", type=int)
+        if min_value is None or max_value is None or min_value > max_value:
+            return False
+        return candidate_min <= max_value and candidate_max >= min_value
+    if exp_type == "more":
+        threshold = args.get("experience_more", type=int)
+        return threshold is not None and candidate_min > threshold
+    return True
 
 
 def apply_vacancy_filters(query):
-    """
-    Применяет поисковые фильтры к рекомендованной ленте вакансий.
+    args = request.args
+    query = query.outerjoin(Company, Vacancy.company)
 
-    Поддерживаемые параметры:
-    q, region, specialization, min_salary,
-    employment_type, schedule, experience, skills.
-    """
+    search_text = args.get("q", "").strip()
+    if search_text:
+        pattern = f"%{search_text}%"
+        query = query.filter(or_(
+            Vacancy.vac_title.ilike(pattern),
+            Vacancy.specialization.ilike(pattern),
+            Vacancy.employment_type.ilike(pattern),
+            Vacancy.schedule.ilike(pattern),
+            Vacancy.experience_required.ilike(pattern),
+            Vacancy.skills_required.ilike(pattern),
+            Vacancy.vac_description.ilike(pattern),
+            Vacancy.vac_region.ilike(pattern),
+            Company.comp_name.ilike(pattern),
+            Company.comp_region.ilike(pattern),
+            Company.comp_description.ilike(pattern),
+        ))
 
-    q = request.args.get("q", "").strip()
-    region = request.args.get("region", "").strip()
-    specialization = request.args.get("specialization", "").strip()
-    min_salary = request.args.get("min_salary", "").strip()
-    employment_type = request.args.get("employment_type", "").strip()
-    schedule = request.args.get("schedule", "").strip()
-    experience = request.args.get("experience", "").strip()
-    skills = request.args.get("skills", "").strip()
-
-    if q:
-        search = f"%{q}%"
-        query = query.filter(
-            or_(
-                Vacancy.vac_title.ilike(search),
-                Vacancy.vac_description.ilike(search),
-            )
-        )
-
+    region = args.get("region", "").strip()
     if region:
-        query = query.filter(
-            Vacancy.vac_region.ilike(f"%{region}%")
-        )
+        query = query.filter(Vacancy.vac_region == region)
 
-    if specialization:
-        query = query.filter(
-            Vacancy.specialization.ilike(f"%{specialization}%")
-        )
+    for name, column in VACANCY_TEXT_FILTERS.items():
+        value = args.get(name, "").strip()
+        if value:
+            query = query.filter(column.ilike(f"%{value}%"))
 
-    if min_salary:
-        try:
-            salary_value = float(min_salary)
-            query = query.filter(
-                Vacancy.salary >= salary_value
-            )
-        except ValueError:
-            pass
-
+    employment_type = args.get("employment_type", "").strip()
     if employment_type:
-        query = query.filter(
-            Vacancy.employment_type == employment_type
-        )
+        query = query.filter(Vacancy.employment_type == employment_type)
 
+    schedule = args.get("schedule", "").strip()
     if schedule:
-        query = query.filter(
-            Vacancy.schedule.ilike(f"%{schedule}%")
-        )
+        query = query.filter(Vacancy.schedule == schedule)
 
-    if experience:
-        query = query.filter(
-            Vacancy.experience_required.ilike(f"%{experience}%")
-        )
+    min_salary = args.get("min_salary", type=float)
+    if min_salary is not None:
+        query = query.filter(Vacancy.salary >= min_salary)
 
-    if skills:
-        query = query.filter(
-            Vacancy.skills_required.ilike(f"%{skills}%")
-        )
+    if args.get("experience_type"):
+        matching_ids = [
+            vacancy.vac_id
+            for vacancy in query.all()
+            if _experience_matches(vacancy.experience_required, args)
+        ]
+        query = db_session.query(Vacancy).filter(Vacancy.vac_id.in_(matching_ids))
 
     return query
 
 
+def my_resume():
+    return db_session.query(Resume).filter_by(user_id=g.current_user.user_id).first()
+
+
+def score_payload(match):
+    return {
+        "score": match["score"],
+        "matched_skills": match["matched_skills"],
+        "missing_skills": match["missing_skills"],
+        "details": match["details"],
+    }
+
+
 @matching_bp.route("/vacancies", methods=["GET"])
 @token_required
+@role_required("candidate")
 def get_recommended_vacancies():
-    """
-    Рекомендованная лента вакансий для текущего соискателя.
-
-    Вакансии сортируются по совместимости.
-    Поиск и фильтры применяются до расчёта совпадения.
-    """
-
-    user = g.current_user
-
-    if user.role != "candidate":
-        return jsonify({
-            "error": "Только для соискателей"
-        }), 403
-
-    resume = (
-        db_session.query(Resume)
-        .filter_by(user_id=user.user_id)
-        .first()
-    )
-
+    resume = my_resume()
     if not resume:
-        return jsonify({
-            "error": "Сначала создайте резюме"
-        }), 404
+        return error("Сначала создайте резюме", 404)
 
-    vacancies_query = db_session.query(Vacancy)
-
-    vacancies_query = apply_vacancy_filters(
-        vacancies_query
-    )
-
-    vacancies = vacancies_query.all()
-
-    results = rank_vacancies_for_resume(
-        resume,
-        vacancies,
-    )
-
-    # Процент и объяснение совпадения не нужны в ленте.
-    # Они будут запрашиваться отдельно на странице вакансии.
+    query = apply_vacancy_filters(db_session.query(Vacancy))
+    ranked = rank_vacancies_for_resume(resume, query.all())
     return jsonify([
         {
-            "vacancy": vacancy_to_dict(item["vacancy"])
+            "vacancy": vacancy_to_dict(item["vacancy"], with_company_name=True),
+            "match": score_payload(item),
         }
-        for item in results
+        for item in ranked
     ])
 
 
-@matching_bp.route(
-    "/vacancies/<int:vac_id>/score",
-    methods=["GET"]
-)
+@matching_bp.route("/vacancies/<int:vac_id>/score", methods=["GET"])
 @token_required
+@role_required("candidate")
 def get_vacancy_match_score(vac_id):
-    """Возвращает процент совпадения вакансии с резюме соискателя."""
-
-    user = g.current_user
-
-    if user.role != "candidate":
-        return jsonify({
-            "error": "Только для соискателей"
-        }), 403
-
-    resume = (
-        db_session.query(Resume)
-        .filter_by(user_id=user.user_id)
-        .first()
-    )
-
+    resume = my_resume()
     if not resume:
-        return jsonify({
-            "error": "Сначала создайте резюме"
-        }), 404
+        return error("Сначала создайте резюме", 404)
 
-    vacancy = (
-        db_session.query(Vacancy)
-        .filter_by(vac_id=vac_id)
-        .first()
-    )
-
+    vacancy = db_session.query(Vacancy).filter_by(vac_id=vac_id).first()
     if not vacancy:
-        return jsonify({
-            "error": "Вакансия не найдена"
-        }), 404
+        return error("Вакансия не найдена", 404)
 
-    match = calculate_match(resume, vacancy)
-
-    return jsonify({
-        "score": match["score"]
-    })
+    return jsonify(score_payload(calculate_match(resume, vacancy)))
 
 
-@matching_bp.route(
-    "/resumes/<int:res_id>/score/<int:vac_id>",
-    methods=["GET"]
-)
+@matching_bp.route("/resumes/<int:res_id>/score/<int:vac_id>", methods=["GET"])
 @token_required
+@role_required("employer")
 def get_resume_match_score(res_id, vac_id):
-    """
-    Возвращает процент совпадения резюме с вакансией работодателя.
-
-    Работодатель может получить оценку только для собственной вакансии.
-    """
-
-    user = g.current_user
-
-    if user.role != "employer":
-        return jsonify({
-            "error": "Только для работодателей"
-        }), 403
-
-    company = (
-        db_session.query(Company)
-        .filter_by(user_id=user.user_id)
-        .first()
-    )
-
-    if not company:
-        return jsonify({
-            "error": "Компания не найдена"
-        }), 404
-
-    vacancy = (
-        db_session.query(Vacancy)
-        .filter_by(
-            vac_id=vac_id,
-            comp_id=company.comp_id,
-        )
-        .first()
-    )
-
+    _, vacancy = own_vacancy(vac_id)
     if not vacancy:
-        return jsonify({
-            "error": "Вакансия не найдена"
-        }), 404
+        return error("Вакансия не найдена", 404)
 
-    resume = (
-        db_session.query(Resume)
-        .filter_by(res_id=res_id)
-        .first()
-    )
-
+    resume = db_session.query(Resume).filter_by(res_id=res_id).first()
     if not resume:
-        return jsonify({
-            "error": "Резюме не найдено"
-        }), 404
+        return error("Резюме не найдено", 404)
 
-    match = calculate_match(resume, vacancy)
-
-    return jsonify({
-        "score": match["score"]
-    })
+    return jsonify(score_payload(calculate_match(resume, vacancy)))
 
 
-@matching_bp.route(
-    "/resumes/<int:vac_id>",
-    methods=["GET"]
-)
+@matching_bp.route("/resumes/<int:vac_id>", methods=["GET"])
 @token_required
+@role_required("employer")
 def get_recommended_resumes(vac_id):
-    """
-    Подходящие резюме для вакансии текущего работодателя.
-    """
-
-    user = g.current_user
-
-    if user.role != "employer":
-        return jsonify({
-            "error": "Только для работодателей"
-        }), 403
-
-    company = (
-        db_session.query(Company)
-        .filter_by(user_id=user.user_id)
-        .first()
-    )
-
-    if not company:
-        return jsonify({
-            "error": "Компания не найдена"
-        }), 404
-
-    vacancy = (
-        db_session.query(Vacancy)
-        .filter_by(
-            vac_id=vac_id,
-            comp_id=company.comp_id,
-        )
-        .first()
-    )
-
+    _, vacancy = own_vacancy(vac_id)
     if not vacancy:
-        return jsonify({
-            "error": "Вакансия не найдена"
-        }), 404
+        return error("Вакансия не найдена", 404)
 
-    resumes = db_session.query(Resume).all()
-
-    results = rank_resumes_for_vacancy(
-        vacancy,
-        resumes,
-    )
-
-    # В ленте возвращаем только данные резюме.
-    # Процент будет запрашиваться отдельно на странице резюме.
+    ranked = rank_resumes_for_vacancy(vacancy, db_session.query(Resume).all())
     return jsonify([
         {
-            "resume": resume_to_dict(item["resume"])
+            "resume": resume_to_dict(item["resume"]),
+            "match": score_payload(item),
         }
-        for item in results
+        for item in ranked
     ])

@@ -112,7 +112,7 @@ export default function CompanyPage() {
               width: "100%",
               padding: 12,
               borderRadius: 8,
-              border: "1px solid #d0d5dd",
+              border: "1px solid var(--line-strong)",
             }}
           >
             <option value="">Выберите регион</option>
@@ -169,7 +169,7 @@ export default function CompanyPage() {
           style={{
             padding: 12,
             borderRadius: 8,
-            border: "1px solid #d0d5dd",
+            border: "1px solid var(--line-strong)",
             fontFamily: "inherit",
             resize: "vertical",
           }}

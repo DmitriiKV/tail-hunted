@@ -1,242 +1,111 @@
-
 import { useEffect, useState } from "react";
-import {
-  Link,
-  useLocation,
-  useNavigate,
-  useParams,
-} from "react-router-dom";
-
-import { resumeService } from "../services/resumeService";
+import { Link, useLocation, useParams } from "react-router-dom";
+import MatchPanel from "../components/MatchPanel";
+import ResumeView from "../components/ResumeView";
+import { useLoad } from "../hooks/useLoad";
+import { apiError } from "../utils/format";
+import { invitationService } from "../services/invitationService";
 import { matchingService } from "../services/matchingService";
+import { resumeService } from "../services/resumeService";
+import { vacancyService } from "../services/vacancyService";
 
 export default function ResumeDetailsPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
   const location = useLocation();
+  const { data: resume, loading, error } = useLoad(() => resumeService.getById(id), [id]);
+  const { data: vacancies } = useLoad(() => vacancyService.getMy());
 
-  const vacancyId = location.state?.vacancyId;
-  const fromRecommendations =
-    location.state?.fromRecommendations === true && !!vacancyId;
+  const [vacancyId, setVacancyId] = useState(String(location.state?.vacancyId || ""));
+  const [scored, setScored] = useState({ key: "", match: null });
+  const [message, setMessage] = useState("");
+  const [inviteState, setInviteState] = useState({ busy: false, error: "", sent: false });
+  const [contactNote, setContactNote] = useState("");
 
-  const [resume, setResume] = useState(null);
-  const [matchScore, setMatchScore] = useState(null);
-  const [scoreLoading, setScoreLoading] = useState(false);
-
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [requestLoading, setRequestLoading] = useState(false);
-  const [requestMessage, setRequestMessage] = useState("");
+  const activeVacancies = vacancies || [];
 
   useEffect(() => {
-    let active = true;
+    if (!vacancyId) return;
+    const key = `${id}:${vacancyId}`;
+    matchingService
+      .getResumeMatchScore(id, vacancyId)
+      .then((match) => setScored({ key, match }))
+      .catch(() => setScored({ key, match: null }));
+  }, [id, vacancyId]);
 
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        setError("");
+  const match = scored.key === `${id}:${vacancyId}` ? scored.match : null;
 
-        const data = await resumeService.getById(id);
-
-        if (active) {
-          setResume(data);
-        }
-
-        if (fromRecommendations) {
-          setScoreLoading(true);
-
-          try {
-            const scoreData =
-              await matchingService.getResumeMatchScore(
-                id,
-                vacancyId
-              );
-
-            if (active) {
-              setMatchScore(scoreData.score);
-            }
-          } catch (err) {
-            console.error(
-              "Не удалось загрузить процент совпадения:",
-              err
-            );
-          } finally {
-            if (active) {
-              setScoreLoading(false);
-            }
-          }
-        }
-      } catch (err) {
-        if (active) {
-          setError(
-            err.response?.data?.error ||
-              "Не удалось загрузить резюме"
-          );
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    };
-
-    loadData();
-
-    return () => {
-      active = false;
-    };
-  }, [id, vacancyId, fromRecommendations]);
-
-  const handleRequestContacts = async () => {
+  const invite = async () => {
+    setInviteState({ busy: true, error: "", sent: false });
     try {
-      setRequestLoading(true);
-      setRequestMessage("");
-
-      const response = await resumeService.requestContacts(id);
-
-      setRequestMessage(
-        response.message || "Запрос отправлен кандидату"
-      );
+      await invitationService.create({ vac_id: Number(vacancyId), res_id: Number(id), message });
+      setInviteState({ busy: false, error: "", sent: true });
+      setMessage("");
     } catch (err) {
-      setRequestMessage(
-        err.response?.data?.error ||
-          "Не удалось отправить запрос"
-      );
-    } finally {
-      setRequestLoading(false);
+      setInviteState({ busy: false, error: apiError(err, "Не удалось отправить приглашение"), sent: false });
     }
   };
 
-  if (loading) {
-    return (
-      <div className="auth-container">
-        Загрузка резюме...
-      </div>
-    );
-  }
+  const requestContacts = async () => {
+    try {
+      const response = await resumeService.requestContacts(id);
+      setContactNote(response.message);
+    } catch (err) {
+      setContactNote(apiError(err, "Не удалось отправить запрос"));
+    }
+  };
 
-  if (error) {
-    return (
-      <div className="auth-container">
-        <p className="error">{error}</p>
-        <button onClick={() => navigate(-1)}>Назад</button>
-      </div>
-    );
-  }
-
-  if (!resume) return null;
+  if (loading) return <p className="muted">Загрузка…</p>;
+  if (error) return <p className="error">{error}</p>;
 
   return (
-    <div className="auth-container" style={{ maxWidth: 900 }}>
-      <h1>{resume.res_title}</h1>
+    <div className="auth-container">
+      <Link to="/resumes" className="muted">← Кандидаты</Link>
+      <div style={{ height: 12 }} />
 
-      {fromRecommendations && (
-        <div
-          style={{
-            padding: 16,
-            marginBottom: 20,
-            border: "1px solid #d1e7dd",
-            background: "#f0fdf4",
-            borderRadius: 10,
-          }}
-        >
+      <div className="card">
+        <label htmlFor="vacancy-select">Выберите вакансию для приглашения</label>
+        <select id="vacancy-select" value={vacancyId} onChange={(e) => setVacancyId(e.target.value)}>
+          <option value="">Выберите вакансию</option>
+          {activeVacancies.map((v) => (
+            <option key={v.vac_id} value={v.vac_id}>{v.vac_title}</option>
+          ))}
+        </select>
+      </div>
 
-          {scoreLoading ? (
-            <p style={{ marginBottom: 0 }}>
-              Рассчитываем совпадение...
-            </p>
-          ) : matchScore !== null ? (
-            <p
-              style={{
-                fontSize: 26,
-                fontWeight: 700,
-                color: "#15803d",
-                margin: "8px 0 0",
-              }}
-            >
-              Подходит вам на {matchScore}%
-            </p>
-          ) : (
-            <p style={{ marginBottom: 0 }}>
-              Не удалось рассчитать процент совпадения.
-            </p>
-          )}
+      <MatchPanel match={match} title="Совпадение с выбранной вакансией" missingTitle="Нет у кандидата:" />
+      <ResumeView resume={resume} />
+
+      {vacancyId && (
+        <div className="card stack">
+          <h3>Приглашение</h3>
+          <textarea
+            value={message}
+            maxLength={500}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Сообщение кандидату (необязательно)"
+          />
+          <div className="row">
+            <button className="btn-primary" onClick={invite} disabled={inviteState.busy}>
+              {inviteState.busy ? "Отправляем…" : "Пригласить на вакансию"}
+            </button>
+            <Link to="/invitations" className="btn-small">Отправленные</Link>
+          </div>
+          {inviteState.sent && <div className="notice">Приглашение отправлено, кандидат получил уведомление.</div>}
+          {inviteState.error && <p className="error">{inviteState.error}</p>}
         </div>
       )}
 
-      <div className="vacancy-card">
-        <div className="vacancy-card-body">
-          <h2>Основная информация</h2>
-
-          <p>
-            <strong>Специализация:</strong>{" "}
-            {resume.professional_area || "Не указана"}
-          </p>
-
-          <p>
-            <strong>Зарплатные ожидания:</strong>{" "}
-            {resume.salary_expectation
-              ? `${resume.salary_expectation} ₽`
-              : "Не указаны"}
-          </p>
-
-          <p>
-            <strong>Пол:</strong> {resume.gender || "Не указан"}
-          </p>
-
-          <p>
-            <strong>Дата рождения:</strong>{" "}
-            {resume.birth_date || "Не указана"}
-          </p>
-
-          <h2>Образование</h2>
-          <p>{resume.education || "Не указано"}</p>
-
-          <h2>Навыки</h2>
-          <p>{resume.skills || "Не указаны"}</p>
-
-          <h2>Опыт работы</h2>
-          <p>{resume.experience || "Не указан"}</p>
-
-          <hr />
-
-          <h2>Контактные данные</h2>
-
-          {resume.contact_email ? (
-            <p>
-              <strong>Email кандидата:</strong>{" "}
-              <a href={`mailto:${resume.contact_email}`}>
-                {resume.contact_email}
-              </a>
-            </p>
-          ) : (
-            <>
-              <p>
-                Кандидат пока не предоставил доступ к контактным данным.
-              </p>
-
-              <button
-                onClick={handleRequestContacts}
-                disabled={requestLoading}
-                className="btn-primary"
-              >
-                {requestLoading
-                  ? "Отправка..."
-                  : "Запросить контакты"}
-              </button>
-
-              {requestMessage && (
-                <p style={{ marginTop: 10 }}>
-                  {requestMessage}
-                </p>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="auth-footer">
-        <Link to="/resumes">← К списку кандидатов</Link>
+      <div className="card">
+        <h3>Контакты</h3>
+        {resume.contact_email ? (
+          <a href={`mailto:${resume.contact_email}`}>{resume.contact_email}</a>
+        ) : (
+          <>
+            <p className="muted">Email скрыт. Кандидат решает, открывать ли его вам.</p>
+            <button onClick={requestContacts} disabled={Boolean(contactNote)}>Запросить контакты</button>
+            {contactNote && <p style={{ marginTop: 8 }}>{contactNote}</p>}
+          </>
+        )}
       </div>
     </div>
   );

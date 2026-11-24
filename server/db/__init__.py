@@ -6,6 +6,8 @@ from .models.resume import Resume
 from .models.vacancy import Vacancy
 from .models.application import Application
 from .models.notification import Notification
+from .models.contact_access_request import ContactAccessRequest
+from .models.invitation import Invitation
 
 __all__ = [
     "engine",
@@ -17,4 +19,6 @@ __all__ = [
     "Vacancy",
     "Application",
     "Notification",
+    "ContactAccessRequest",
+    "Invitation",
 ]

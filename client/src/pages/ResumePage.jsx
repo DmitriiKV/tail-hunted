@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { resumeService } from "../services/resumeService";
 import { REGIONS, ANY_REGION } from "../constants/regions";
+import { buildExperienceLevel, parseExperienceLevel } from "../utils/experience";
+import { SCHEDULE_OPTIONS } from "../constants/schedules";
 
 const initialForm = {
   res_title: "",
@@ -16,45 +18,6 @@ const initialForm = {
   experience: "",
   experience_level: "",
 };
-
-function parseExperienceLevel(value) {
-  if (!value || value === "Без опыта") {
-    return {
-      type: value === "Без опыта" ? "none" : "",
-      min: "",
-      max: "",
-      more: "",
-    };
-  }
-
-  const range = value.match(/^От\s+(\d+)\s+до\s+(\d+)\s+лет?$/i);
-
-  if (range) {
-    return { type: "range", min: range[1], max: range[2], more: "" };
-  }
-
-  const more = value.match(/^Более\s+(\d+)\s+лет?$/i);
-
-  if (more) {
-    return { type: "more", min: "", max: "", more: more[1] };
-  }
-
-  return { type: "", min: "", max: "", more: "" };
-}
-
-function buildExperienceLevel(selection) {
-  if (selection.type === "none") return "Без опыта";
-
-  if (selection.type === "range") {
-    return `От ${selection.min} до ${selection.max} лет`;
-  }
-
-  if (selection.type === "more") {
-    return `Более ${selection.more} лет`;
-  }
-
-  return "";
-}
 
 export default function ResumePage() {
   const [form, setForm] = useState(initialForm);
@@ -206,14 +169,14 @@ export default function ResumePage() {
           name="gender"
           value={form.gender || ""}
           onChange={handleChange}
-          style={{ padding: 12, borderRadius: 8, border: "1px solid #d0d5dd" }}
+          style={{ padding: 12, borderRadius: 8, border: "1px solid var(--line-strong)" }}
         >
           <option value="">Пол</option>
           <option value="male">Мужской</option>
           <option value="female">Женский</option>
         </select>
 
-        <label style={{ fontSize: 14, color: "#667085", marginTop: 4 }}>
+        <label style={{ fontSize: 14, color: "var(--muted)", marginTop: 4 }}>
           Дата рождения
         </label>
 
@@ -254,7 +217,7 @@ export default function ResumePage() {
               width: "100%",
               padding: 12,
               borderRadius: 8,
-              border: "1px solid #d0d5dd",
+              border: "1px solid var(--line-strong)",
             }}
           >
             <option value={ANY_REGION}>{ANY_REGION}</option>
@@ -273,6 +236,46 @@ export default function ResumePage() {
               </option>
             ))}
           </select>
+        </div>
+
+        <div style={{ marginTop: 8 }}>
+          <label style={{ display: "block", marginBottom: 8 }}>
+            Предпочтительный график работы
+          </label>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Можно выбрать несколько вариантов. Если график не важен, выберите «Не имеет значения».
+          </p>
+          <div style={{ display: "grid", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <input
+                type="checkbox"
+                checked={(form.preferred_schedule || []).includes("Не имеет значения")}
+                onChange={(e) => setForm((prev) => ({
+                  ...prev,
+                  preferred_schedule: e.target.checked ? ["Не имеет значения"] : [],
+                }))}
+              />
+              Не имеет значения
+            </label>
+            {SCHEDULE_OPTIONS.map((option) => (
+              <label key={option.value} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={(form.preferred_schedule || []).includes(option.value)}
+                  onChange={(e) => setForm((prev) => {
+                    const current = (prev.preferred_schedule || []).filter((item) => item !== "Не имеет значения");
+                    return {
+                      ...prev,
+                      preferred_schedule: e.target.checked
+                        ? [...current, option.value]
+                        : current.filter((item) => item !== option.value),
+                    };
+                  })}
+                />
+                {option.label}
+              </label>
+            ))}
+          </div>
         </div>
 
         <input
@@ -302,7 +305,7 @@ export default function ResumePage() {
               width: "100%",
               padding: 12,
               borderRadius: 8,
-              border: "1px solid #d0d5dd",
+              border: "1px solid var(--line-strong)",
             }}
           >
             <option value="">Выберите стаж</option>
@@ -366,7 +369,7 @@ export default function ResumePage() {
           style={{
             padding: 12,
             borderRadius: 8,
-            border: "1px solid #d0d5dd",
+            border: "1px solid var(--line-strong)",
             fontFamily: "inherit",
             resize: "vertical",
           }}

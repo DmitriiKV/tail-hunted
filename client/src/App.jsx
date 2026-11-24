@@ -1,5 +1,6 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
 import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
@@ -8,13 +9,16 @@ import CompanyPage from "./pages/CompanyPage";
 import ResumePage from "./pages/ResumePage";
 import VacancyPage from "./pages/VacancyPage";
 import VacanciesListPage from "./pages/VacanciesListPage";
+import VacancyDetailsPage from "./pages/VacancyDetailsPage";
 import MyVacanciesPage from "./pages/MyVacanciesPage";
 import ResumesListPage from "./pages/ResumesListPage";
+import ResumeDetailsPage from "./pages/ResumeDetailsPage";
 import MyApplicationsPage from "./pages/MyApplicationsPage";
 import EmployerApplicationsPage from "./pages/EmployerApplicationsPage";
+import EmployerAllApplicationsPage from "./pages/EmployerAllApplicationsPage";
 import ApplicationResumePage from "./pages/ApplicationResumePage";
-import VacancyDetailsPage from "./pages/VacancyDetailsPage";
-import ResumeDetailsPage from "./pages/ResumeDetailsPage";
+import InvitationsPage from "./pages/InvitationsPage";
+import NotificationsPage from "./pages/NotificationsPage";
 
 export default function App() {
   return (
@@ -23,71 +27,31 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/vacancies" element={<ProtectedRoute role="candidate"><VacanciesListPage /></ProtectedRoute>} />
-          <Route
-            path="/vacancy/:id"
-            element={
-              <ProtectedRoute role="candidate">
-                <VacancyDetailsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
 
-          <Route path="/company" element={
-            <ProtectedRoute role="employer"><CompanyPage /></ProtectedRoute>
-          } />
+          <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+            <Route path="/" element={<HomePage />} />
+            <Route path="/invitations" element={<InvitationsPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
 
-          <Route path="/resume" element={
-            <ProtectedRoute role="candidate"><ResumePage /></ProtectedRoute>
-          } />
+            <Route element={<ProtectedRoute role="candidate" />}>
+              <Route path="/vacancies" element={<VacanciesListPage />} />
+              <Route path="/vacancy/:id" element={<VacancyDetailsPage />} />
+              <Route path="/resume" element={<ResumePage />} />
+              <Route path="/my-applications" element={<MyApplicationsPage />} />
+            </Route>
 
-          <Route path="/vacancy/new" element={
-            <ProtectedRoute role="employer"><VacancyPage /></ProtectedRoute>
-          } />
-
-          <Route path="/vacancy/:id/edit" element={
-            <ProtectedRoute role="employer"><VacancyPage /></ProtectedRoute>
-          } />
-
-          <Route path="/my-vacancies" element={
-            <ProtectedRoute role="employer"><MyVacanciesPage /></ProtectedRoute>
-          } />
-          <Route path="/resumes" element={
-            <ProtectedRoute role="employer"><ResumesListPage /></ProtectedRoute>
-          } />
-          <Route
-            path="/my-applications"
-            element={
-              <ProtectedRoute role="candidate">
-                <MyApplicationsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/vacancy/:id/applications"
-            element={
-              <ProtectedRoute role="employer">
-                <EmployerApplicationsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/application/:appId/resume"
-            element={
-              <ProtectedRoute role="employer">
-                <ApplicationResumePage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/resume/:id"
-            element={
-              <ProtectedRoute role="employer">
-                <ResumeDetailsPage />
-              </ProtectedRoute>
-            }
-          />
+            <Route element={<ProtectedRoute role="employer" />}>
+              <Route path="/company" element={<CompanyPage />} />
+              <Route path="/vacancy/new" element={<VacancyPage />} />
+              <Route path="/vacancy/:id/edit" element={<VacancyPage />} />
+              <Route path="/vacancy/:id/applications" element={<EmployerApplicationsPage />} />
+              <Route path="/applications/all" element={<EmployerAllApplicationsPage />} />
+              <Route path="/my-vacancies" element={<MyVacanciesPage />} />
+              <Route path="/resumes" element={<ResumesListPage />} />
+              <Route path="/resume/:id" element={<ResumeDetailsPage />} />
+              <Route path="/application/:appId/resume" element={<ApplicationResumePage />} />
+            </Route>
+          </Route>
         </Routes>
       </BrowserRouter>
     </AuthProvider>

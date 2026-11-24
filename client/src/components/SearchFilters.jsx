@@ -1,257 +1,147 @@
-
 import { useState } from "react";
+import { experienceFilterLabel } from "../utils/experience";
+
+const SORT_OPTIONS = [
+  { value: "match", label: "По совпадению" },
+  { value: "newest", label: "Сначала новые" },
+  { value: "oldest", label: "Сначала старые" },
+  { value: "salary_asc", label: "Зарплата по возрастанию" },
+  { value: "salary_desc", label: "Зарплата по убыванию" },
+];
+
+const optionLabel = (field, value) => {
+  if (field.type === "select") {
+    return field.options.find((o) => o.value === value)?.label || value;
+  }
+  if (field.type === "experience") return experienceFilterLabel(value);
+  return value;
+};
+
+const isActive = (field, value) =>
+  field.type === "experience" ? Boolean(value?.type) : value !== "" && value != null;
 
 export default function SearchFilters({
   filters,
+  fields,
   onChange,
   onReset,
-  fields,
   sort,
   onSortChange,
+  searchPlaceholder = "Поиск",
 }) {
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [sortOpen, setSortOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
-  const inputStyle = {
-    width: "100%",
-    padding: "10px 12px",
-    border: "1px solid #d0d5dd",
-    borderRadius: 8,
-    boxSizing: "border-box",
-    fontSize: 14,
+  const extra = fields.filter((field) => field.name !== "q");
+  const active = extra.filter((field) => isActive(field, filters[field.name]));
+  const clear = (name) =>
+    onChange({
+      target: {
+        name,
+        value: name === "experience" ? { type: "", min: "", max: "", more: "" } : "",
+      },
+    });
+
+  const updateExperience = (key, value) => {
+    const next = { ...(filters.experience || {}), [key]: value };
+    if (key === "type" && value === "range") {
+      next.min = next.min || "0";
+      next.max = next.max || "50";
+    }
+    if (key === "type" && value === "more") {
+      next.more = next.more || "0";
+    }
+    onChange({ target: { name: "experience", value: next } });
   };
-
-  const fieldStyle = {
-    display: "flex",
-    flexDirection: "column",
-    gap: 6,
-  };
-
-  const activeFiltersCount = Object.entries(filters).filter(
-    ([key, value]) => key !== "q" && value !== ""
-  ).length;
-
-  const sortOptions = [
-    { value: "newest", label: "Сначала новые" },
-    { value: "oldest", label: "Сначала старые" },
-    { value: "salary_asc", label: "Зарплата: по возрастанию" },
-    { value: "salary_desc", label: "Зарплата: по убыванию" },
-  ];
-
-  const toggleButtonStyle = {
-    padding: "10px 16px",
-    border: "1px solid #d0d5dd",
-    borderRadius: 8,
-    background: "#fff",
-    cursor: "pointer",
-    fontSize: 14,
-    fontWeight: 500,
-  };
-
-  const showSort =
-    sort !== undefined && typeof onSortChange === "function";
 
   return (
-    <div style={{ marginBottom: 24 }}>
-      {/* Общее поле поиска с иконкой */}
-      <div style={{ marginBottom: 12, position: "relative" }}>
-        <svg
-          width="19"
-          height="19"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="#667085"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{
-            position: "absolute",
-            left: 13,
-            top: "50%",
-            transform: "translateY(-50%)",
-            pointerEvents: "none",
-          }}
-          aria-hidden="true"
-        >
-          <circle cx="11" cy="11" r="8" />
-          <path d="m21 21-4.35-4.35" />
-        </svg>
-
+    <div>
+      <div className="search-bar">
         <input
-          id="general-search"
           name="q"
-          type="text"
+          type="search"
           value={filters.q || ""}
           onChange={onChange}
-          placeholder="Название, профессия, навыки и описание..."
-          aria-label="Поиск вакансий"
-          style={{
-            ...inputStyle,
-            paddingLeft: 42,
-          }}
+          placeholder={searchPlaceholder}
+          aria-label={searchPlaceholder}
         />
-      </div>
-
-      {/* Кнопки фильтров и сортировки */}
-      <div
-        style={{
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-          marginBottom: 12,
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => {
-            setFiltersOpen((prev) => !prev);
-            setSortOpen(false);
-          }}
-          style={toggleButtonStyle}
-        >
-          ☷ Фильтры
-          {activeFiltersCount > 0 && ` (${activeFiltersCount})`}
-          {filtersOpen ? " ▲" : " ▼"}
-        </button>
-
-        {showSort && (
-          <button
-            type="button"
-            onClick={() => {
-              setSortOpen((prev) => !prev);
-              setFiltersOpen(false);
-            }}
-            style={toggleButtonStyle}
-          >
-            ↕ Сортировка
-            {sortOpen ? " ▲" : " ▼"}
-          </button>
+        {onSortChange && (
+          <select value={sort} onChange={(e) => onSortChange(e.target.value)} aria-label="Сортировка">
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         )}
+        <button type="button" onClick={() => setOpen(!open)}>
+          Фильтры{active.length > 0 && ` · ${active.length}`}
+        </button>
       </div>
 
-      {/* Дополнительные фильтры */}
-      {filtersOpen && (
-        <div
-          style={{
-            padding: 18,
-            border: "1px solid #e5e7eb",
-            borderRadius: 10,
-            marginBottom: 12,
-          }}
-        >
-          <h3 style={{ marginTop: 0 }}>
-            Дополнительные фильтры
-          </h3>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns:
-                "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: 14,
-            }}
-          >
-            {fields
-              .filter((field) => field.name !== "q")
-              .map((field) => (
-                <div
-                  key={field.name}
-                  style={{
-                    ...fieldStyle,
-                    gridColumn: field.fullWidth
-                      ? "1 / -1"
-                      : undefined,
-                  }}
-                >
-                  <label htmlFor={field.name}>
-                    {field.label}
-                  </label>
-
-                  {field.type === "select" ? (
-                    <select
-                      id={field.name}
-                      name={field.name}
-                      value={filters[field.name] || ""}
-                      onChange={onChange}
-                      style={inputStyle}
-                    >
-                      <option value="">Любой</option>
-
-                      {field.options.map((option) => (
-                        <option
-                          key={option.value}
-                          value={option.value}
-                        >
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      id={field.name}
-                      name={field.name}
-                      type={field.type || "text"}
-                      min={
-                        field.type === "number" ? 0 : undefined
-                      }
-                      value={filters[field.name] || ""}
-                      onChange={onChange}
-                      placeholder={field.placeholder || ""}
-                      style={inputStyle}
-                    />
-                  )}
-                </div>
-              ))}
-          </div>
-
-          <button
-            type="button"
-            onClick={onReset}
-            style={{ marginTop: 16 }}
-          >
-            Сбросить фильтры
-          </button>
+      {active.length > 0 && (
+        <div className="chips" style={{ marginBottom: 10 }}>
+          {active.map((field) => (
+            <span key={field.name} className="chip">
+              {field.label}: {optionLabel(field, filters[field.name])}
+              <button type="button" className="chip-remove" onClick={() => clear(field.name)} aria-label="Убрать фильтр">
+                ×
+              </button>
+            </span>
+          ))}
+          <button type="button" className="btn-small" onClick={onReset}>Сбросить всё</button>
         </div>
       )}
 
-      {/* Сортировка — если она подключена */}
-      {showSort && sortOpen && (
-        <div
-          style={{
-            padding: 18,
-            border: "1px solid #e5e7eb",
-            borderRadius: 10,
-            marginBottom: 12,
-            maxWidth: 350,
-          }}
-        >
-          <label
-            htmlFor="sort-select"
-            style={{
-              display: "block",
-              marginBottom: 8,
-            }}
-          >
-            Сортировать:
-          </label>
-
-          <select
-            id="sort-select"
-            value={sort}
-            onChange={(event) =>
-              onSortChange(event.target.value)
-            }
-            style={inputStyle}
-          >
-            {sortOptions.map((option) => (
-              <option
-                key={option.value}
-                value={option.value}
-              >
-                {option.label}
-              </option>
+      {open && (
+        <div className="filter-panel">
+          <div className="filter-grid">
+            {extra.map((field) => (
+              <div key={field.name}>
+                <label htmlFor={field.name}>{field.label}</label>
+                {field.type === "select" ? (
+                  <select id={field.name} name={field.name} value={filters[field.name] || ""} onChange={onChange}>
+                    <option value="">Не важно</option>
+                    {field.options.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                ) : field.type === "experience" ? (
+                  <>
+                    <select
+                      id={field.name}
+                      value={filters.experience?.type || ""}
+                      onChange={(e) => updateExperience("type", e.target.value)}
+                    >
+                      <option value="">Не важно</option>
+                      <option value="none">Без опыта</option>
+                      <option value="range">Диапазон лет</option>
+                      <option value="more">Более N лет</option>
+                    </select>
+                    {filters.experience?.type === "range" && (
+                      <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                        <input aria-label="Опыт от, лет" type="number" min="0" max="49" placeholder="От"
+                          value={filters.experience.min || ""} onChange={(e) => updateExperience("min", e.target.value)} />
+                        <input aria-label="Опыт до, лет" type="number" min="1" max="50" placeholder="До"
+                          value={filters.experience.max || ""} onChange={(e) => updateExperience("max", e.target.value)} />
+                      </div>
+                    )}
+                    {filters.experience?.type === "more" && (
+                      <input aria-label="Более скольких лет" type="number" min="0" max="50" placeholder="Лет"
+                        value={filters.experience.more || ""} onChange={(e) => updateExperience("more", e.target.value)} />
+                    )}
+                  </>
+                ) : (
+                  <input
+                    id={field.name}
+                    name={field.name}
+                    type={field.type || "text"}
+                    min={field.type === "number" ? 0 : undefined}
+                    value={filters[field.name] || ""}
+                    onChange={onChange}
+                    placeholder={field.placeholder || ""}
+                  />
+                )}
+              </div>
             ))}
-          </select>
+          </div>
         </div>
       )}
     </div>

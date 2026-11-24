@@ -1,313 +1,98 @@
-
 import { useEffect, useState } from "react";
-import {
-  Link,
-  useNavigate,
-  useParams,
-  useLocation,
-} from "react-router-dom";
-
-import { vacancyService } from "../services/vacancyService";
-import {
-  createApplication,
-  getMyApplications,
-} from "../services/applicationService";
+import { Link, useParams } from "react-router-dom";
+import MatchPanel from "../components/MatchPanel";
+import { useLoad } from "../hooks/useLoad";
+import { apiError, EMPLOYMENT_LABELS, formatDate, formatSalary } from "../utils/format";
+import { applicationService } from "../services/applicationService";
 import { matchingService } from "../services/matchingService";
+import { vacancyService } from "../services/vacancyService";
 
 export default function VacancyDetailsPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const fromRecommendations =
-    location.state?.fromRecommendations === true;
-
-  const [vacancy, setVacancy] = useState(null);
-  const [matchScore, setMatchScore] = useState(null);
-  const [alreadyApplied, setAlreadyApplied] = useState(false);
-
-  const [loading, setLoading] = useState(true);
-  const [applicationsLoading, setApplicationsLoading] = useState(true);
-  const [applying, setApplying] = useState(false);
-
-  const [error, setError] = useState("");
-  const [applicationsError, setApplicationsError] = useState("");
+  const { data: vacancy, loading, error } = useLoad(() => vacancyService.getById(id), [id]);
+  const [match, setMatch] = useState(null);
+  const [applied, setApplied] = useState(null);
+  const [busy, setBusy] = useState(false);
   const [applyError, setApplyError] = useState("");
-  const [success, setSuccess] = useState("");
 
   useEffect(() => {
-    let active = true;
+    matchingService.getVacancyMatchScore(id).then(setMatch).catch(() => setMatch(null));
+    applicationService
+      .mine()
+      .then((list) => setApplied(list.some((a) => String(a.vac_id) === String(id))))
+      .catch(() => setApplied(false));
+  }, [id]);
 
-    const loadData = async () => {
-      try {
-        const response = await vacancyService.getById(id);
-
-        if (active) {
-          setVacancy(response);
-        }
-      } catch (err) {
-        if (active) {
-          setError(
-            err.response?.data?.error ||
-              "Не удалось загрузить вакансию"
-          );
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-
-      try {
-        const response = await getMyApplications();
-        const applications = response.data.applications || [];
-
-        if (active) {
-          const hasApplication = applications.some(
-            (application) =>
-              Number(application.vac_id) === Number(id)
-          );
-
-          setAlreadyApplied(hasApplication);
-        }
-      } catch {
-        if (active) {
-          setApplicationsError(
-            "Не удалось проверить ваши отклики. Отправка отклика временно недоступна."
-          );
-        }
-      } finally {
-        if (active) {
-          setApplicationsLoading(false);
-        }
-      }
-
-      // Получаем процент совпадения, только если пришли из ленты рекомендаций
-      if (fromRecommendations) {
-        try {
-          const response =
-            await matchingService.getVacancyMatchScore(id);
-
-          if (active) {
-            setMatchScore(response.score);
-          }
-        } catch {
-          // Если оценку получить не удалось, просто не показываем её
-        }
-      }
-    };
-
-    loadData();
-
-    return () => {
-      active = false;
-    };
-  }, [id, fromRecommendations]);
-
-  const handleApply = async () => {
-    setApplying(true);
+  const apply = async () => {
+    setBusy(true);
     setApplyError("");
-    setSuccess("");
-
     try {
-      await createApplication(Number(id));
-      setAlreadyApplied(true);
-      setSuccess("Ваш отклик успешно отправлен!");
+      await applicationService.create(Number(id));
+      setApplied(true);
     } catch (err) {
-      if (err.response?.status === 409) {
-        setAlreadyApplied(true);
-        setSuccess("Вы уже откликались на эту вакансию.");
-      } else {
-        setApplyError(
-          err.response?.data?.error ||
-            "Не удалось отправить отклик"
-        );
-      }
+      if (err.response?.status === 409 && applied !== false) setApplied(true);
+      setApplyError(apiError(err, "Не удалось отправить отклик"));
     } finally {
-      setApplying(false);
+      setBusy(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className="auth-container">
-        Загрузка вакансии...
-      </div>
-    );
-  }
+  if (loading) return <p className="muted">Загрузка…</p>;
+  if (error) return <p className="error">{error}</p>;
 
-  if (error) {
-    return (
-      <div className="auth-container">
-        <p className="error">{error}</p>
-        <button onClick={() => navigate("/vacancies")}>
-          ← К списку вакансий
-        </button>
-      </div>
-    );
-  }
-
-  if (!vacancy) {
-    return (
-      <div className="auth-container">
-        Вакансия не найдена.
-      </div>
-    );
-  }
-
-  const company = vacancy.company;
+  const { company } = vacancy;
+  const salary = formatSalary(vacancy.salary);
 
   return (
-    <div className="auth-container" style={{ maxWidth: 800 }}>
-      <h1>{vacancy.vac_title}</h1>
+    <div className="auth-container">
+      <Link to="/vacancies" className="muted">← Вакансии</Link>
+      <h1 style={{ marginTop: 8 }}>{vacancy.vac_title}</h1>
+      <p style={{ fontSize: 20, fontWeight: 600 }}>{salary || <span className="muted">Зарплата не указана</span>}</p>
 
-      {fromRecommendations && matchScore !== null && (
-        <div
-          style={{
-            marginBottom: 20,
-            padding: "12px 16px",
-            background: "#eff8ff",
-            borderRadius: 8,
-            color: "#175cd3",
-            fontWeight: 600,
-          }}
-        >
-          Подходит вам на {Math.round(Number(matchScore))}%
+      <MatchPanel match={match} title="Совпадение с вашим резюме" missingTitle="Чего не хватает в резюме:" />
+
+      <div className="card">
+        <dl className="facts">
+          <div><dt>Регион</dt><dd>{vacancy.vac_region || "—"}</dd></div>
+          <div><dt>Специализация</dt><dd>{vacancy.specialization || "—"}</dd></div>
+          <div><dt>Опыт</dt><dd>{vacancy.experience_required || "—"}</dd></div>
+          <div><dt>Занятость</dt><dd>{EMPLOYMENT_LABELS[vacancy.employment_type] || "—"}</dd></div>
+          <div><dt>График</dt><dd>{vacancy.schedule || "—"}</dd></div>
+          <div><dt>Опубликована</dt><dd>{formatDate(vacancy.vac_created_at)}</dd></div>
+        </dl>
+        <h3>Навыки</h3>
+        <p>{vacancy.skills_required || "Не указаны"}</p>
+        <h3>Описание</h3>
+        <p style={{ whiteSpace: "pre-wrap" }}>{vacancy.vac_description || "Описание не заполнено"}</p>
+      </div>
+
+      {company && (
+        <div className="card">
+          <h3>{company.comp_name}</h3>
+          <p className="muted">
+            {[company.comp_region, company.address, company.size && `сотрудников: ${company.size}`]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          {company.response_rate !== null && (
+            <p>
+              Отвечает на {company.response_rate}% откликов
+            </p>
+          )}
+          {company.comp_description && <p style={{ whiteSpace: "pre-wrap" }}>{company.comp_description}</p>}
         </div>
       )}
 
-      <div className="vacancy-card">
-        <div className="vacancy-card-body">
-          <h2 style={{ color: "#0000FF" }}>
-            {vacancy.salary
-              ? `${vacancy.salary.toLocaleString("ru-RU")} ₽`
-              : "Зарплата не указана"}
-          </h2>
-
-          <p>
-            <strong>Регион:</strong>{" "}
-            {vacancy.vac_region || "Не указан"}
-          </p>
-
-          <p>
-            <strong>Специализация:</strong>{" "}
-            {vacancy.specialization || "Не указана"}
-          </p>
-
-          <p>
-            <strong>Опыт работы:</strong>{" "}
-            {vacancy.experience_required || "Не указан"}
-          </p>
-
-          <p>
-            <strong>Тип занятости:</strong>{" "}
-            {vacancy.employment_type || "Не указан"}
-          </p>
-
-          <p>
-            <strong>График работы:</strong>{" "}
-            {vacancy.schedule || "Не указан"}
-          </p>
-
-          <p>
-            <strong>Количество сотрудников:</strong>{" "}
-            {vacancy.hiring_plan ?? "Не указано"}
-          </p>
-
-          <p>
-            <strong>Необходимые навыки:</strong>
-          </p>
-          <p style={{ whiteSpace: "pre-wrap" }}>
-            {vacancy.skills_required || "Не указаны"}
-          </p>
-
-          <h3>Описание вакансии</h3>
-          <p style={{ whiteSpace: "pre-wrap" }}>
-            {vacancy.vac_description || "Описание отсутствует"}
-          </p>
-
-          <p style={{ color: "#667085", fontSize: 13 }}>
-            Опубликована:{" "}
-            {vacancy.vac_created_at
-              ? new Date(vacancy.vac_created_at).toLocaleDateString(
-                  "ru-RU"
-                )
-              : "Дата не указана"}
-          </p>
-        </div>
-      </div>
-
-      <h2>О компании</h2>
-
-      {company ? (
-        <div className="vacancy-card">
-          <div className="vacancy-card-body">
-            <h3>{company.comp_name}</h3>
-
-            <p>
-              <strong>Регион:</strong>{" "}
-              {company.comp_region || "Не указан"}
-            </p>
-
-            <p>
-              <strong>Адрес:</strong>{" "}
-              {company.address || "Не указан"}
-            </p>
-
-            <p>
-              <strong>Размер компании:</strong>{" "}
-              {company.size || "Не указан"}
-            </p>
-
-            <h4>Описание компании</h4>
-            <p style={{ whiteSpace: "pre-wrap" }}>
-              {company.comp_description || "Описание отсутствует"}
-            </p>
-          </div>
+      {applied ? (
+        <div className="notice">
+          Отклик отправлен. Статус вы увидите в разделе <Link to="/my-applications">«Мои отклики»</Link>.
         </div>
       ) : (
-        <p>Информация о компании отсутствует.</p>
+        <button className="btn-primary" onClick={apply} disabled={busy || applied === null}>
+          {busy ? "Отправляем…" : "Откликнуться"}
+        </button>
       )}
-
-      <div style={{ marginTop: 20 }}>
-        {applicationsError && (
-          <p className="error">{applicationsError}</p>
-        )}
-
-        {applyError && (
-          <p className="error">{applyError}</p>
-        )}
-
-        {success && (
-          <p style={{ color: "green" }}>{success}</p>
-        )}
-
-        {alreadyApplied ? (
-          <button className="btn-small" disabled>
-            Вы откликнулись
-          </button>
-        ) : (
-          <button
-            className="btn-small"
-            onClick={handleApply}
-            disabled={
-              applying ||
-              applicationsLoading ||
-              !!applicationsError
-            }
-          >
-            {applying
-              ? "Отправка..."
-              : applicationsLoading
-              ? "Проверка откликов..."
-              : "Откликнуться"}
-          </button>
-        )}
-      </div>
-
-      <div className="auth-footer">
-        <Link to="/vacancies">← Вернуться к вакансиям</Link>
-      </div>
+      {applyError && <p className="error" style={{ marginTop: 10 }}>{applyError}</p>}
     </div>
   );
 }

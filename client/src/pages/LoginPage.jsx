@@ -23,7 +23,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="auth-container">
+    <div className="auth-screen">
+      <div className="auth-card">
       <h1>Вход</h1>
       <form className="auth-form" onSubmit={handleSubmit}>
         <input
@@ -45,6 +46,7 @@ export default function LoginPage() {
       </form>
       <div className="auth-footer">
         Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
+      </div>
       </div>
     </div>
   );

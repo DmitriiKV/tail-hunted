@@ -5,6 +5,7 @@ from .vacancy import Vacancy
 from .application import Application
 from .notification import Notification
 from .contact_access_request import ContactAccessRequest
+from .invitation import Invitation
 
 __all__ = [
     "User",
@@ -13,5 +14,6 @@ __all__ = [
     "Vacancy",
     "Application",
     "Notification",
-    "ContactAccessRequest"
+    "ContactAccessRequest",
+    "Invitation",
 ]

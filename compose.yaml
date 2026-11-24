@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:16
+    container_name: job-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: jobuser
+      POSTGRES_PASSWORD: jobpass
+      POSTGRES_DB: jobapp
+    ports:
+      - "5433:5432"
+    volumes:
+      - job_data:/var/lib/postgresql/data
+
+volumes:
+  job_data:
+    external: true
+    name: d4ef6bf5ef4eb73bb01ddb108f2bb5d72349fda86adf87f02ed3fbccda6dff81

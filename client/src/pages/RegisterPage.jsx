@@ -32,7 +32,8 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="auth-container">
+    <div className="auth-screen">
+      <div className="auth-card">
       <h1>Регистрация</h1>
       <form className="auth-form" onSubmit={handleSubmit}>
         <input
@@ -98,6 +99,7 @@ export default function RegisterPage() {
       </form>
       <div className="auth-footer">
         Уже есть аккаунт? <Link to="/login">Войти</Link>
+      </div>
       </div>
     </div>
   );

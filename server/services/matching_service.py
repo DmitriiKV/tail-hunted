@@ -110,39 +110,23 @@ def _compare_specialization(candidate_area, vacancy_area):
 
 
 def _experience_to_years(value):
-    """
-    Примерно переводит текстовый уровень опыта в количество лет.
-    """
+    """Возвращает минимальный гарантированный стаж из выбранного диапазона."""
     text = _normalize(value)
-
     if not text:
         return None
-
-    if "без опыта" in text or "не требуется" in text:
+    if "без опыта" in text or text.startswith("до "):
         return 0
 
-    if "более 6" in text or "от 6" in text or "6+" in text:
-        return 6
+    more_match = re.search(r"более\s+(\d+)", text)
+    if more_match:
+        return int(more_match.group(1)) + 1
 
-    if "более 3" in text or "от 3" in text:
-        if "до 6" in text or "6 лет" in text:
-            return 3
+    range_match = re.search(r"от\s+(\d+)\s+до\s+(\d+)", text)
+    if range_match:
+        return int(range_match.group(1))
 
-    if "до 1" in text:
-        return 0
-
-    numbers = [
-        int(number)
-        for number in re.findall(r"\d+", text)
-    ]
-
-    if len(numbers) >= 2:
-        return numbers[0]
-
-    if len(numbers) == 1:
-        return numbers[0]
-
-    return None
+    numbers = re.findall(r"\d+", text)
+    return int(numbers[0]) if numbers else None
 
 
 def _compare_experience(candidate_level, required_level):
@@ -274,7 +258,7 @@ def calculate_match(resume, vacancy):
     }
 
 
-def _sort_and_shuffle_ties(results, entity_key):
+def _sort_and_shuffle_ties(results):
     """
     Сначала сортирует результаты по проценту совпадения.
     Затем случайно перемешивает элементы с одинаковым процентом.
@@ -312,7 +296,7 @@ def rank_vacancies_for_resume(resume, vacancies):
             **match,
         })
 
-    return _sort_and_shuffle_ties(results, "vacancy")
+    return _sort_and_shuffle_ties(results)
 
 
 def rank_resumes_for_vacancy(vacancy, resumes):
@@ -327,4 +311,4 @@ def rank_resumes_for_vacancy(vacancy, resumes):
             **match,
         })
 
-    return _sort_and_shuffle_ties(results, "resume")
+    return _sort_and_shuffle_ties(results)

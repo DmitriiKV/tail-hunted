@@ -1,6 +1,7 @@
-sqlalchemy
-psycopg2-binary
 flask
 flask-cors
-python-dotenv
+sqlalchemy
+psycopg[binary]
 alembic
+PyJWT
+python-dotenv

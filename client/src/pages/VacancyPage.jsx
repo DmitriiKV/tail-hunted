@@ -3,54 +3,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { vacancyService } from "../services/vacancyService";
 import { REGIONS } from "../constants/regions";
-
-function parseExperienceLevel(value) {
-  if (!value) {
-    return { type: "", min: "1", max: "3", more: "5" };
-  }
-
-  if (value === "Без опыта") {
-    return { type: "none", min: "1", max: "3", more: "5" };
-  }
-
-  const range = value.match(/^От\s+(\d+)\s+до\s+(\d+)\s+лет?$/i);
-
-  if (range) {
-    return {
-      type: "range",
-      min: range[1],
-      max: range[2],
-      more: "5",
-    };
-  }
-
-  const more = value.match(/^Более\s+(\d+)\s+лет?$/i);
-
-  if (more) {
-    return {
-      type: "more",
-      min: "1",
-      max: "3",
-      more: more[1],
-    };
-  }
-
-  return { type: "", min: "1", max: "3", more: "5" };
-}
-
-function buildExperienceLevel(selection) {
-  if (selection.type === "none") return "Без опыта";
-
-  if (selection.type === "range") {
-    return `От ${selection.min} до ${selection.max} лет`;
-  }
-
-  if (selection.type === "more") {
-    return `Более ${selection.more} лет`;
-  }
-
-  return "";
-}
+import { buildExperienceLevel, parseExperienceLevel } from "../utils/experience";
+import { VACANCY_SCHEDULE_OPTIONS } from "../constants/schedules";
 
 export default function VacancyPage() {
   const { id } = useParams();
@@ -132,7 +86,11 @@ export default function VacancyPage() {
       }
     }
 
-    if (form.salary) {
+    if (form.salary === "" || form.salary == null) {
+      return "Укажите зарплату в вакансии";
+    }
+
+    if (form.salary !== "") {
       const n = Number(form.salary);
 
       if (!Number.isInteger(n) || n < 0 || n > 100_000_000) {
@@ -238,7 +196,7 @@ export default function VacancyPage() {
           style={{
             padding: 12,
             borderRadius: 8,
-            border: "1px solid #d0d5dd",
+            border: "1px solid var(--line-strong)",
           }}
         >
           <option value="full">Полная занятость</option>
@@ -247,12 +205,28 @@ export default function VacancyPage() {
           <option value="internship">Стажировка</option>
         </select>
 
-        <input
+        <label style={{ display: "block", marginTop: 8, marginBottom: 8 }}>
+          График работы
+        </label>
+        <select
           name="schedule"
-          placeholder="График (5/2, 2/2, гибкий)"
           value={form.schedule || ""}
           onChange={handleChange}
-        />
+          style={{
+            width: "100%",
+            padding: 12,
+            borderRadius: 8,
+            border: "1px solid var(--line-strong)",
+          }}
+        >
+          <option value="">Выберите график</option>
+          {form.schedule && !VACANCY_SCHEDULE_OPTIONS.some((item) => item.value === form.schedule) && (
+            <option value={form.schedule}>{form.schedule}</option>
+          )}
+          {VACANCY_SCHEDULE_OPTIONS.map((item) => (
+            <option key={item.value} value={item.value}>{item.label}</option>
+          ))}
+        </select>
 
         <input
           name="salary"
@@ -261,6 +235,7 @@ export default function VacancyPage() {
           max="100000000"
           placeholder="Зарплата в месяц"
           value={form.salary || ""}
+          required
           onChange={handleChange}
         />
 
@@ -277,7 +252,7 @@ export default function VacancyPage() {
               width: "100%",
               padding: 12,
               borderRadius: 8,
-              border: "1px solid #d0d5dd",
+              border: "1px solid var(--line-strong)",
             }}
           >
             <option value="">Выберите стаж</option>
@@ -353,7 +328,7 @@ export default function VacancyPage() {
               width: "100%",
               padding: 12,
               borderRadius: 8,
-              border: "1px solid #d0d5dd",
+              border: "1px solid var(--line-strong)",
             }}
           >
             <option value="">Выберите регион</option>
@@ -382,7 +357,7 @@ export default function VacancyPage() {
           style={{
             padding: 12,
             borderRadius: 8,
-            border: "1px solid #d0d5dd",
+            border: "1px solid var(--line-strong)",
             fontFamily: "inherit",
             resize: "vertical",
           }}

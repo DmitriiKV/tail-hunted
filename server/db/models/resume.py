@@ -19,6 +19,7 @@ class Resume(Base):
     skills = Column(String(1000))
     experience = Column(String(3000))  # Подробное описание опыта работы
     experience_level = Column(String(50))  # Стаж работы
+    preferred_schedule = Column(String(500))
     preferred_region = Column(
         String(100),
         nullable=False,

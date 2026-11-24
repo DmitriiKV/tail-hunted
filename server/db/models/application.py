@@ -15,6 +15,7 @@ class Application(Base):
     vac_id = Column(Integer, ForeignKey("vacancies.vac_id"), nullable=False)
     status = Column(String(20), nullable=False, default="pending")
     app_created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    status_changed_at = Column(DateTime)
 
     resume = relationship("Resume", back_populates="applications")
     vacancy = relationship("Vacancy", back_populates="applications")

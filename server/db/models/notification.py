@@ -23,6 +23,12 @@ class Notification(Base):
         nullable=True
     )
 
+    inv_id = Column(
+        Integer,
+        ForeignKey("invitations.inv_id"),
+        nullable=True
+    )
+
     title = Column(String(150), nullable=False)
     message = Column(String(500), nullable=False)
     notification_type = Column(String(30), nullable=False)
@@ -32,3 +38,4 @@ class Notification(Base):
 
     user = relationship("User", back_populates="notifications")
     application = relationship("Application")
+    invitation = relationship("Invitation")

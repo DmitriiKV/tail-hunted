@@ -1,81 +1,59 @@
-import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { useLoad } from "../hooks/useLoad";
+import { apiError, EMPLOYMENT_LABELS, formatSalary } from "../utils/format";
 import { vacancyService } from "../services/vacancyService";
 
 export default function MyVacanciesPage() {
-  const [vacancies, setVacancies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
+  const { data, setData, loading, error } = useLoad(() => vacancyService.getMy());
+  const [actionError, setActionError] = useState("");
 
-  const load = () => {
-    setLoading(true);
-    vacancyService
-      .getMy()
-      .then(setVacancies)
-      .catch((err) => setError(err.response?.data?.error || "Ошибка загрузки"))
-      .finally(() => setLoading(false));
-  };
+  const vacancies = data || [];
 
-  useEffect(() => {
-    load();
-  }, []);
+  const remove = async (vacancy) => {
+    if (!window.confirm(`Удалить вакансию «${vacancy.vac_title}»?`)) return;
 
-  const handleDelete = async (id, title) => {
-    if (!window.confirm(`Удалить вакансию "${title}"?`)) return;
+    setActionError("");
     try {
-      await vacancyService.remove(id);
-      setVacancies((prev) => prev.filter((v) => v.vac_id !== id));
+      await vacancyService.remove(vacancy.vac_id);
+      setData(vacancies.filter((v) => v.vac_id !== vacancy.vac_id));
     } catch (err) {
-      alert(err.response?.data?.error || "Не удалось удалить");
+      setActionError(apiError(err, "Не удалось удалить вакансию"));
     }
   };
 
-  if (loading) return <div className="auth-container">Загрузка...</div>;
-
   return (
-    <div className="auth-container" style={{ maxWidth: 720 }}>
-      <h1>Мои вакансии</h1>
+    <div className="auth-container">
+      <div className="row-between">
+        <h1>Мои вакансии</h1>
+        <Link to="/vacancy/new" className="btn-primary">+ Новая вакансия</Link>
+      </div>
+
       {error && <p className="error">{error}</p>}
-      {vacancies.length === 0 && !error && (
-        <p style={{ textAlign: "center", color: "#667085" }}>
-          У вас пока нет вакансий.
-        </p>
-      )}
+      {actionError && <p className="error">{actionError}</p>}
+      {loading && <p className="muted">Загрузка…</p>}
+      {!loading && vacancies.length === 0 && <div className="empty">Вакансий пока нет.</div>}
+
       {vacancies.map((v) => (
-        <div key={v.vac_id} className="vacancy-card">
-          <div className="vacancy-card-body">
+        <div key={v.vac_id} className="card row-between" style={{ alignItems: "flex-start" }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <h3>{v.vac_title}</h3>
-            <p style={{ margin: "0 0 4px", color: "#4f46e5", fontWeight: 500 }}>
-              {v.salary ? `${v.salary} ₽` : "з/п не указана"}
+            <div className={`job-salary ${v.salary ? "" : "missing"}`}>{formatSalary(v.salary) || "Зарплата не указана"}</div>
+            <p className="muted">
+              {[v.vac_region, EMPLOYMENT_LABELS[v.employment_type]].filter(Boolean).join(" · ")}
             </p>
-            <p style={{ margin: 0, fontSize: 13, color: "#667085" }}>
-              {v.vac_region} · {v.employment_type}
+            <p className="muted">
+              Откликов: {v.applications_total}
+              {v.applications_new > 0 && <span className="badge warn" style={{ marginLeft: 8 }}>без ответа: {v.applications_new}</span>}
             </p>
           </div>
           <div className="vacancy-card-actions">
-            <Link to={`/vacancy/${v.vac_id}/edit`} className="btn-small">
-              Редактировать
-            </Link>
-            <Link to={`/vacancy/${v.vac_id}/applications`} className="btn-small">
-              Отклики
-            </Link>
-            <button
-              className="btn-small danger"
-              onClick={() => handleDelete(v.vac_id, v.vac_title)}
-            >
-              Удалить
-            </button>
+            <Link to={`/vacancy/${v.vac_id}/applications`} className="btn-small">Отклики</Link>
+            <Link to={`/vacancy/${v.vac_id}/edit`} className="btn-small">Изменить</Link>
+            <button className="btn-small danger" onClick={() => remove(v)}>Удалить</button>
           </div>
         </div>
       ))}
-      <div className="auth-footer">
-        <Link to="/vacancy/new">+ Создать вакансию</Link>
-        <br />
-        <Link to="/" style={{ marginTop: 8, display: "inline-block" }}>
-          ← На главную
-        </Link>
-      </div>
     </div>
   );
 }
