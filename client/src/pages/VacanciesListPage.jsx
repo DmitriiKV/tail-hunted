@@ -7,7 +7,6 @@ import { applicationService } from "../services/applicationService";
 import { matchingService } from "../services/matchingService";
 import { VACANCY_SCHEDULE_OPTIONS } from "../constants/schedules";
 import { REGIONS } from "../constants/regions";
-import MatchPanel from "../components/MatchPanel";
 
 const EMPTY_EXPERIENCE = { type: "", min: "", max: "", more: "" };
 const INITIAL_FILTERS = {
@@ -149,7 +148,6 @@ export default function VacanciesListPage() {
                   .filter(Boolean).join(" · ")}
               </p>
               {v.skills_required && <p>{v.skills_required}</p>}
-              <MatchPanel match={v.match} title="Совпадение с вашим резюме" missingTitle="Не хватает навыков:" />
             </div>
             {applied.has(v.vac_id) ? (
               <span className="badge ok">Вы откликнулись</span>

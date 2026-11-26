@@ -7,7 +7,6 @@ import { matchingService } from "../services/matchingService";
 import { vacancyService } from "../services/vacancyService";
 import { SCHEDULE_OPTIONS } from "../constants/schedules";
 import { REGIONS } from "../constants/regions";
-import MatchPanel from "../components/MatchPanel";
 import { matchesExperienceFilter } from "../utils/experience";
 
 const PER_PAGE = 10;
@@ -173,7 +172,6 @@ export default function ResumesListPage() {
                 ...(resume.preferred_schedule || [])].filter(Boolean).join(" · ")}
             </p>
             {resume.skills && <p>{resume.skills}</p>}
-            <MatchPanel match={resume.match} title="Совпадение с вакансией" missingTitle="Не хватает навыков:" />
           </div>
         </div>
       ))}

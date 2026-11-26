@@ -298,7 +298,7 @@ python app.py
 Терминал 2 — frontend:
 bash
 cd D:\Projects\tail-hunted\client
-npm run dev
+npm.cmd run dev
 И ДОЛБОЁБ ЗАПУСТИ ДОКЕР БЛЯТЬ
 docker compose up -d
 
